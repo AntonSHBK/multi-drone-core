@@ -15,7 +15,7 @@ def _bootstrap_local_path() -> None:
 
 _bootstrap_local_path()
 
-from multi_drone_core.backend.mavlink.handler import MavlinkBackend, MavlinkBackendConfig
+from multi_drone_core.backend.mavlink.handler import MavlinkBackend, MavlinkBackendConfig, MavMode
 from multi_drone_core.controllers.common_controller import CommonController
 
 def main() -> None:  
@@ -37,14 +37,31 @@ def main() -> None:
     print(f"mavlink device: {config.connect_device}")
     print("sys.path configured for local repos.")
     
-    # controller.start()
-    # print("Controller started.")
+    controller.start()
+    print("Controller started.")
     
-    # time.sleep(20)
+    time.sleep(5)
     
-    # controller.stop()
-    # print("Controller stopped.")
+    controller.backend: "MavlinkBackend" = controller.backend
+    
+    controller.backend._set_mode(MavMode.manual)
+    print("Set mode to MANUAL.")
+    
+    time.sleep(5)
+    controller.backend._set_mode(MavMode.stabilize)
+    print("Set mode to STABILIZE.")
+    
+    time.sleep(5)
+    controller.backend._set_mode(MavMode.manual)
+    print("Set mode to MANUAL.")
+        
+    controller.stop()
+    print("Controller stopped.")
 
+    params: dict = controller.backend.get_all_parameters()
+    print("Parameters:")
+    for name, value in params.items():
+        print(f"  {name}: {value}")
 
 if __name__ == "__main__":
     main()
