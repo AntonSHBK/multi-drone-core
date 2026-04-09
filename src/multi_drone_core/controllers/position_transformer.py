@@ -301,3 +301,6 @@ class DroneLocalityState():
                 "yaw": self.yaw_NED,
             },
         }
+
+    def __repr__(self) -> str:
+        return f"DroneLocalityState(local_enu={self.position_local_ENU}, local_ned={self.position_local_NED}, global_enu={self.position_global_ENU}, global_ned={self.position_global_NED})"

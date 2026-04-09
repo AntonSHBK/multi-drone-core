@@ -37,13 +37,13 @@ def main() -> None:
     print(f"mavlink device: {config.connect_device}")
     print("sys.path configured for local repos.")
     
-    controller.start()
-    print("Controller started.")
+    # controller.start()
+    # print("Controller started.")
     
-    time.sleep(20)
+    # time.sleep(20)
     
-    controller.stop()
-    print("Controller stopped.")
+    # controller.stop()
+    # print("Controller stopped.")
 
 
 if __name__ == "__main__":

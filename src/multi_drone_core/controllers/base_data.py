@@ -38,9 +38,11 @@ class EulerData(BaseData):
     """
 
     def __init__(self, roll=0.0, pitch=0.0, yaw=0.0):
-        self._euler = np.array([self._validate_and_convert(roll),
-                                self._validate_and_convert(pitch),
-                                self._validate_and_convert(yaw)])
+        self._euler = np.array(
+            [self._validate_and_convert(roll),
+            self._validate_and_convert(pitch),
+            self._validate_and_convert(yaw)]
+        )
 
     @property
     def roll(self):

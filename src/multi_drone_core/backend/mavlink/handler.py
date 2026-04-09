@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from platform import machine
 import time
 import threading
 import math
 from os import PathLike
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, Iterable, Mapping, Optional, Callable
 
 import numpy as np
@@ -14,43 +16,17 @@ from multi_drone_core.backend.base_backend import BaseBackend
 from multi_drone_core.backend.mavlink.connection import mavlink_connection
 
 if TYPE_CHECKING:
-    from multi_drone_core.controllers.base_controller import BaseController
-
-
-class VehicleStatusLocal:
-    def __init__(self) -> None:
-        self.connected: bool = False
-        self.armed: bool = False
-        self.custom_mode: int = 0
-        self.system_status: int = 0
-        self.failsafe: bool = False
-        self.battery_voltage_v: float = 0.0
-        self.battery_current_a: float = 0.0
-        self.battery_remaining_pct: int = -1
-        self.last_heartbeat_time: float = 0.0
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "connected": self.connected,
-            "armed": self.armed,
-            "custom_mode": self.custom_mode,
-            "system_status": self.system_status,
-            "failsafe": self.failsafe,
-            "battery_voltage_v": self.battery_voltage_v,
-            "battery_current_a": self.battery_current_a,
-            "battery_remaining_pct": self.battery_remaining_pct,
-            "last_heartbeat_time": self.last_heartbeat_time,
-        }
     
-    def reset(self):
-        self.__init__()
-        
-    def __repr__(self):
-        return (
-            f"VehicleStatusLocal(connected={self.connected}, armed={self.armed}, "
-            f"custom_mode={self.custom_mode}, failsafe={self.failsafe}, "
-            f"battery={self.battery_voltage_v:.2f}V/{self.battery_remaining_pct}%)"
-        )
+    from pymavlink.dialects.v10.ardupilotmega import MAVLink as MAVLink1
+    from pymavlink.dialects.v10.ardupilotmega import MAVLink_message as MAVLink_message1 
+    from pymavlink.dialects.v10.ardupilotmega import(
+        MAVLink_param_value_message
+    )
+    # from pymavlink.dialects.v20.common import MAVLink as MAVLink2
+    # from pymavlink.dialects.v20.common import MAVLink_message as MAVLink_message2
+    
+    from multi_drone_core.controllers.base_controller import BaseController
+    
     
 @dataclass
 class MavlinkBackendConfig:
@@ -105,8 +81,37 @@ class MavlinkBackendConfig:
     # Таймаут ожидания сообщения (в секундах)
     recv_match_timeout: float | None = 0.5
     
-    # Частота применения буфера к core-состоянию (сек)
-    local_update_period_s: float = 0.1
+    # --- Параметры локального обновления состояния ---
+    
+    # Частота обновления локального состояния машины (сек)
+    local_position_update_period_s: float = 0.2
+    
+    # --- MAVLink heartbeat параметры ---
+    
+    heartbeat_period_s: float = 0.1
+    
+    # Тип MAVLink для heartbeat
+    heartbeat_type: int = mavutil.mavlink.MAV_TYPE_ONBOARD_CONTROLLER
+    
+    # Тип автопилота для heartbeat
+    heartbeat_autopilot: int = mavutil.mavlink.MAV_AUTOPILOT_INVALID
+
+
+class MavMode(str, Enum):
+    manual = "MANUAL"
+    stabilized = "STABILIZED"
+    acro = "ACRO"
+    rattitude = "RATTITUDE"
+    altctl = "ALTCTL"
+    posctl = "POSCTL"
+    loiter = "LOITER"
+    mission = "MISSION"
+    rtl = "RTL"
+    land = "LAND"
+    rtgs = "RTGS"
+    followme = "FOLLOWME"
+    offboard = "OFFBOARD"
+    takeoff = "TAKEOFF"    
 
 
 class MavlinkBackend(BaseBackend):
@@ -124,10 +129,11 @@ class MavlinkBackend(BaseBackend):
 
         self._config = config    
 
-        self._master = None
+        self._mavlink_connect = None
+        self._mavlink: "MAVLink1" = None
         self._connected = False
         
-        self._vehicle_status_local = VehicleStatusLocal()
+        # self._vehicle_status_local = VehicleStatusLocal()
         
         self._buffer_lock = threading.Lock()
         # TODO сделать не словарь а класс с конкретными полями для каждого типа сообщений, которые нам нужны
@@ -136,8 +142,7 @@ class MavlinkBackend(BaseBackend):
         self._stop_event = threading.Event()
         self._reader_thread: threading.Thread | None = None
         self._local_position_thread: threading.Thread | None = None
-        # self._heartbeat_thread: threading.Thread | None = None
-        # self._vehicle_status_thread: threading.Thread | None = None
+        self._heartbeat_thread: threading.Thread | None = None
 
     @property
     def is_connected(self) -> bool:
@@ -147,7 +152,7 @@ class MavlinkBackend(BaseBackend):
         if self._connected:
             return
         try:
-            self._master = mavlink_connection(
+            self._mavlink_connect = mavlink_connection(
                 device=self._config.connect_device,
                 baud=self._config.connect_baudrate,
                 source_system=self._config.connect_source_system,
@@ -170,13 +175,18 @@ class MavlinkBackend(BaseBackend):
             )
 
             heartbeat_timeout = max(1.0, float(self._config.connect_udp_timeout or 3.0))
-            heartbeat = self._master.wait_heartbeat(timeout=heartbeat_timeout)
+            heartbeat = self._mavlink_connect.wait_heartbeat(timeout=heartbeat_timeout)
             if heartbeat is None:
                 raise TimeoutError("No heartbeat received from MAVLink target.")
             
+            self._mavlink = self._mavlink_connect.mav
+            
+            self._target_system = self._mavlink_connect.target_system
+            self._target_component = self._mavlink_connect.target_component
+            
             self.log_info(
                 f"MAVLink connected: device={self._config.connect_device}, "
-                f"target={self._master.target_system}:{self._master.target_component}"
+                f"target={self._mavlink_connect.target_system}:{self._mavlink_connect.target_component}"
             )
             
             self._start_background_workers()
@@ -184,29 +194,30 @@ class MavlinkBackend(BaseBackend):
             self._connected = True            
 
         except Exception:
-            if self._master is not None:
+            if self._mavlink_connect is not None:
                 try:
-                    self._master.close()
+                    self._mavlink_connect.close()
                 except Exception:
                     pass
-                self._master = None
+                self._mavlink_connect = None
             self._connected = False
             raise
 
     def disconnect(self) -> None:
         self._stop_background_workers()
         
-        if not self._connected and self._master is None:
+        if not self._connected and self._mavlink_connect is None:
             return
+        
+        self._mavlink = None
 
-        if self._master is not None:
+        if self._mavlink_connect is not None:
             try:
-                self._master.close()
+                self._mavlink_connect.close()
             except Exception as exc:
                 self.log_warning(f"MAVLink close warning: {exc}")
             finally:
-                self._master = None
-        self._vehicle_status_local.reset()
+                self._mavlink_connect = None
         
         with self._buffer_lock:
             self._message_buffer.clear()
@@ -214,9 +225,146 @@ class MavlinkBackend(BaseBackend):
         self._connected = False
         self.log_info("MAVLink disconnected")
 
-    def send_command(self) -> Any:
-        pass
+    def send_command(
+        self,
+        command: int,
+        *,
+        param1: float = 0.0,
+        param2: float = 0.0,
+        param3: float = 0.0,
+        param4: float = 0.0,
+        param5: float = 0.0,
+        param6: float = 0.0,
+        param7: float = 0.0,
+        target_system: Optional[int] = None,
+        target_component: Optional[int] = None,
+        confirmation: int = 0,
+    ) -> Any:
+        # https://mavlink.io/en/mavgen_python/howto_requestmessages.html
+        return self._send_long_command(
+            command=command,
+            param1=param1,
+            param2=param2,
+            param3=param3,
+            param4=param4,
+            param5=param5,
+            param6=param6,
+            param7=param7,
+            target_system=target_system,
+            target_component=target_component,
+            confirmation=confirmation,
+        )
 
+    def _start_background_workers(self) -> None:
+        self._stop_event.clear()
+        self._reader_thread = threading.Thread(
+            target=self._read_messages_loop,
+            name="mavlink-reader-thread",
+            daemon=True,
+        )
+        self._local_position_thread = threading.Thread(
+            target=self._machine_local_position_update_loop,
+            name="machine-local-position-thread",
+            daemon=True,
+        )
+        self._heartbeat_thread = threading.Thread(
+            target=self._heartbeat_loop,
+            name="mavlink-heartbeat-thread",
+            daemon=True,
+        )
+        
+        self._reader_thread.start()
+        self._local_position_thread.start()
+
+    def _stop_background_workers(self) -> None:
+        self._stop_event.set()
+
+        for thread in (
+            self._reader_thread, 
+            self._local_position_thread,
+            self._heartbeat_thread,
+        ):
+            if thread is not None and thread.is_alive():
+                thread.join(timeout=2.0)
+
+        self._reader_thread = None
+        self._local_position_thread = None
+
+    def _read_messages_loop(self) -> None:
+        # https://mavlink.io/en/mavgen_python/
+        while not self._stop_event.is_set():
+            try:
+                msg: "MAVLink_message1" = self._mavlink_connect.recv_match(
+                    type=self._config.recv_match_type,
+                    condition=self._config.recv_match_condition,
+                    blocking=self._config.recv_match_blocking,
+                    timeout=self._config.recv_match_timeout,
+                )
+
+                if msg is None:
+                    continue
+
+                msg_type = msg.get_type()
+                
+                if msg_type != "BAD_DATA":
+                    self.controller.machine_system_data.update_from_msg(
+                        msg_type=msg_type,
+                        msg=msg,
+                    )
+
+            except Exception as exc:
+                self.log_warning(f"MAVLink reader error: {exc}")
+
+    def _machine_local_position_update_loop(self) -> None:
+        period = max(0.01, float(self._config.local_position_update_period_s))
+
+        while not self._stop_event.is_set():
+            try:
+                with self._buffer_lock:
+                    x = self.controller.machine_system_data.local_position_ned.x
+                    y = self.controller.machine_system_data.local_position_ned.y
+                    z = self.controller.machine_system_data.local_position_ned.z
+                    
+                    vx = self.controller.machine_system_data.local_position_ned.vx
+                    vy = self.controller.machine_system_data.local_position_ned.vy
+                    vz = self.controller.machine_system_data.local_position_ned.vz
+                    
+                    q1 = self.controller.machine_system_data.attitude_quaternion.q1
+                    q2 = self.controller.machine_system_data.attitude_quaternion.q2
+                    q3 = self.controller.machine_system_data.attitude_quaternion.q3
+                    q4 = self.controller.machine_system_data.attitude_quaternion.q4
+                    
+                if not any(math.isnan(v) for v in (x, y, z, vx, vy, vz)):
+                    self.controller.current_state.update_position(
+                        np.array([x, y, z], dtype=float),
+                        system="local_NED",
+                    )
+                    self.controller.current_state.update_velocity(
+                        np.array([vx, vy, vz], dtype=float),
+                        system="local_NED",
+                    )
+                
+                if not any(math.isnan(v) for v in (q1, q2, q3, q4)):
+                    # MAVLink ATTITUDE_QUATERNION: q1=w, q2=x, q3=y, q4=z
+                    q = np.array([q2, q3, q4, q1], dtype=float)
+                    self.controller.current_state.update_orientation(q, system="local_NED")
+
+            except Exception as exc:
+                self.log_warning(f"MAVLink local update error: {exc}")
+
+            self._stop_event.wait(period)
+            
+    def _heartbeat_loop(self) -> None:
+        period = max(0.01, float(self._config.heartbeat_period_s))
+
+        while not self._stop_event.is_set():
+            try:
+                self._heartbeat_send()
+            except Exception as exc:
+                self.log_warning(f"MAVLink heartbeat error: {exc}")
+
+            self._stop_event.wait(period)
+    
     def _send_long_command(
         self,
         command: int,
@@ -248,13 +396,13 @@ class MavlinkBackend(BaseBackend):
         confirmation : int
             Поле confirmation для повторной отправки/идемпотентности.
         """
-        if self._master is None or not self._connected:
+        if self._mavlink_connect is None or not self._connected:
             raise RuntimeError("MAVLink backend is not connected. Call connect() first.")
 
-        ts = int(target_system if target_system is not None else self._master.target_system)
-        tc = int(target_component if target_component is not None else self._master.target_component)
+        ts = int(target_system if target_system is not None else self._mavlink_connect.target_system)
+        tc = int(target_component if target_component is not None else self._mavlink_connect.target_component)
 
-        self._master.mav.command_long_send(
+        self._mavlink.command_long_send(
             ts,
             tc,
             int(command),
@@ -266,13 +414,14 @@ class MavlinkBackend(BaseBackend):
             float(param5),
             float(param6),
             float(param7),
-        )
+        )        
+        response = self._mavlink_connect.recv_match(type='COMMAND_ACK', blocking=True)
         self.log_info(
             f"Sent COMMAND_LONG: command={command}, target={ts}:{tc}, "
             f"params=[{param1}, {param2}, {param3}, {param4}, {param5}, {param6}, {param7}], "
             f"confirmation={confirmation}"
         )
-        return 
+        return response
 
     def _send_int_command(
         self,
@@ -317,13 +466,13 @@ class MavlinkBackend(BaseBackend):
         target_component : int | None
             Целевой component id. Если None, используется target из heartbeat.
         """
-        if self._master is None or not self._connected:
+        if self._mavlink_connect is None or not self._connected:
             raise RuntimeError("MAVLink backend is not connected. Call connect() first.")
 
-        ts = int(target_system if target_system is not None else self._master.target_system)
-        tc = int(target_component if target_component is not None else self._master.target_component)
+        ts = int(target_system if target_system is not None else self._mavlink_connect.target_system)
+        tc = int(target_component if target_component is not None else self._mavlink_connect.target_component)
 
-        self._master.mav.command_int_send(
+        self._mavlink.command_int_send(
             ts,
             tc,
             int(frame),
@@ -339,6 +488,8 @@ class MavlinkBackend(BaseBackend):
             float(z),
         )
         
+        response = self._mavlink_connect.recv_match(type='COMMAND_ACK', blocking=True)
+        
         self.log_info(
             f"Sent COMMAND_INT: command={command}, frame={frame}, target={ts}:{tc}, "
             f"params=[{param1}, {param2}, {param3}, {param4}], "
@@ -346,131 +497,81 @@ class MavlinkBackend(BaseBackend):
             f"x={x}, y={y}, z={z}"
         )
 
-        return    
+        return response 
     
-    def _start_background_workers(self) -> None:
-        self._stop_event.clear()
-        self._reader_thread = threading.Thread(
-            target=self._read_messages_loop,
-            name="mavlink-reader-thread",
-            daemon=True,
-        )
-        self._local_position_thread = threading.Thread(
-            target=self._local_position_update_loop,
-            name="mavlink-local-position-thread",
-            daemon=True,
+    def _heartbeat_send(self) -> None:
+        # https://mavlink.io/en/services/heartbeat.html
+        self._mavlink.heartbeat_send(
+            self._config.heartbeat_type,
+            self._config.heartbeat_autopilot,
+             0, 0, 0
         )
         
-        self._reader_thread.start()
-        self._local_position_thread.start()
-
-    def _stop_background_workers(self) -> None:
-        self._stop_event.set()
-
-        for thread in (self._reader_thread, self._local_position_thread):
-            if thread is not None and thread.is_alive():
-                thread.join(timeout=2.0)
-
-        self._reader_thread = None
-        self._local_position_thread = None
-
-    def _read_messages_loop(self) -> None:
-        interesting_types = {
-            "HEARTBEAT",
-            "LOCAL_POSITION_NED",
-            "ATTITUDE",
-            "ATTITUDE_QUATERNION",
-            "SYS_STATUS",
-            "GLOBAL_POSITION_INT",
-        }
-
-        while not self._stop_event.is_set():
-            try:
-                msg = self._master.recv_match(
-                    type=self._config.recv_match_type,
-                    condition=self._config.recv_match_condition,
-                    blocking=self._config.recv_match_blocking,
-                    timeout=self._config.recv_match_timeout,
-                )
-
-                if msg is None:
-                    continue
-
-                msg_type = msg.get_type()
-
-                if msg_type in interesting_types:
-                    with self._buffer_lock:
-                        self._message_buffer[msg_type] = msg
-
-            except Exception as exc:
-                self.log_warning(f"MAVLink reader error: {exc}")
-
-    def _local_position_update_loop(self) -> None:
-        period = max(0.01, float(self._config.local_update_period_s))
-
-        while not self._stop_event.is_set():
-            try:
-                with self._buffer_lock:
-                    snapshot = dict(self._message_buffer)
-
-                # 1) POSITION + VELOCITY
-                lpn = snapshot.get("LOCAL_POSITION_NED")
-                if lpn is not None:
-                    self.controller.current_state.update_position(
-                        np.array([lpn.x, lpn.y, lpn.z], dtype=float),
-                        system="local_NED",
-                    )
-                    self.controller.current_state.update_velocity(
-                        np.array([lpn.vx, lpn.vy, lpn.vz], dtype=float),
-                        system="local_NED",
-                    )
-
-                # 2) ORIENTATION (prefer quaternion if available)
-                att_q = snapshot.get("ATTITUDE_QUATERNION")
-                if att_q is not None:
-                    # MAVLink ATTITUDE_QUATERNION: q1=w, q2=x, q3=y, q4=z
-                    q = np.array([att_q.q2, att_q.q3, att_q.q4, att_q.q1], dtype=float)
-                    self.controller.current_state.update_orientation(q, system="local_NED")
-                else:
-                    att = snapshot.get("ATTITUDE")
-                    # self.controller.current_state.update_orientation(q, system="local_NED")
-                    pass
-
-                # 3) STATUS
-                hb = snapshot.get("HEARTBEAT")
-                if hb is not None:
-                #     self._vehicle_status_local.connected = True
-                #     self._vehicle_status_local.last_heartbeat_time = time.monotonic()
-                #     self._vehicle_status_local.custom_mode = int(getattr(hb, "custom_mode", 0))
-                #     self._vehicle_status_local.system_status = int(getattr(hb, "system_status", 0))
-                #     self._vehicle_status_local.armed = bool(
-                #         int(getattr(hb, "base_mode", 0))
-                #         & mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED
-                #     )
-                    pass
-
-                sys_status = snapshot.get("SYS_STATUS")
-                if sys_status is not None:
-                    # self._vehicle_status_local.battery_voltage_v = float(
-                    #     getattr(sys_status, "voltage_battery", 0)
-                    # ) / 1000.0
-                    # self._vehicle_status_local.battery_current_a = float(
-                    #     getattr(sys_status, "current_battery", 0)
-                    # ) / 100.0
-                    # self._vehicle_status_local.battery_remaining_pct = int(
-                    #     getattr(sys_status, "battery_remaining", -1)
-                    # )
-                    # self._vehicle_status_local.failsafe = bool(
-                    #     int(getattr(sys_status, "errors_count1", 0))
-                    #     or int(getattr(sys_status, "errors_count2", 0))
-                    # )
-                    pass
-
-            except Exception as exc:
-                self.log_warning(f"MAVLink local update error: {exc}")
-
-            self._stop_event.wait(period)
+    def _set_mode_send(self, mode: MavMode) -> None:
+        mode_id = self._mavlink_connect.mode_mapping().get(mode)
+        if mode_id is None:
+            raise ValueError(f"Unknown mode '{mode}' for current MAVLink target.")
+        
+        self._mavlink.set_mode_send(
+            self._mavlink_connect.target_system,
+            mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
+            mode_id,
+        )
     
+    def _set_mode(self, mode: MavMode) -> None:
+        self._mavlink_connect.set_mode(mode)
+        
+    def set_parameter(
+        self,
+        parm_name: str,
+        parm_value: float,
+        parm_type: int = None
+    ) -> None:
+        self._mavlink_connect.param_set_send(
+            parm_name=parm_name,
+            parm_value=parm_value,
+            parm_type=parm_type
+        )
+        
+    def get_parameter(self, parm_name: int | str) -> Optional[float]:
+        self._mavlink_connect.param_fetch_one(parm_name)
+        msg: "MAVLink_param_value_message" = self._mavlink_connect.recv_match(type='PARAM_VALUE', blocking=True, timeout=2.0)
+        if msg is not None:
+            return msg.param_value
+        return None
+    
+    def get_all_parameters(self, timeout: float = 5.0) -> Dict[str, float]:
+        params: Dict[str, float] = {}
+
+        self._mavlink_connect.param_fetch_all()
+
+        start_time = time.time()
+        expected_count = None
+
+        while True:
+            if time.time() - start_time > timeout:
+                break
+
+            msg: "MAVLink_param_value_message" = self._mavlink_connect.recv_match(
+                type="PARAM_VALUE",
+                blocking=True,
+                timeout=1.0
+            )
+
+            if msg is None:
+                continue
+
+            name = msg.param_id.rstrip(b"\x00").decode("ascii")
+            params[name] = msg.param_value
+
+            if expected_count is None:
+                expected_count = msg.param_count
+
+            if expected_count is not None and len(params) >= expected_count:
+                break
+
+        return params
+
     def log_error(self, message: str) -> None:
         self.logger.error(message)
 

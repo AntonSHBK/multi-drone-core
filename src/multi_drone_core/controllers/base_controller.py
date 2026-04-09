@@ -8,6 +8,7 @@ from typing import Any, Deque, Dict, Mapping, Optional
 import numpy as np
 
 from multi_drone_core.backend.base_backend import BaseBackend
+from multi_drone_core.controllers.machine_system_data import MachineSystemData
 from multi_drone_core.controllers.base_data import OrientationData, PositionData
 from multi_drone_core.controllers.position_transformer import DroneLocalityState
 from multi_drone_core.utils.logger import get_core_loggers
@@ -29,6 +30,9 @@ class BaseController(ABC):
         log_dir: Path = Path("logs"),
         log_level: str = "INFO",
     ) -> None:
+        """
+        Инициализация базового контроллера.
+        """
         self.machine_id = int(machine_id)
         self.machine_type = str(machine_type)
         self.machine_name = f"machine_{self.machine_id}"
@@ -61,6 +65,8 @@ class BaseController(ABC):
             world_position=self.world_position_enu,
             world_orientation=self.world_orientation_enu,
         )
+        
+        self.machine_system_data = MachineSystemData()
 
         self._running = False
         self._backend: BaseBackend = None

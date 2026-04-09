@@ -49,23 +49,17 @@ class BaseBackend(ABC):
         Отправка унифицированной команды на дрон.
         """
 
-    # @abstractmethod
-    # def set_parameter(self) -> Any:
-    #     """
-    #     Установка одного параметра автопилота.
-    #     """
+    @abstractmethod
+    def set_parameter(self) -> Any:
+        """
+        Установка одного параметра автопилота.
+        """
 
-    # @abstractmethod
-    # def set_parameters(self) -> Any:
-    #     """
-    #     Установка нескольких параметров автопилота.
-    #     """
-
-    # @abstractmethod
-    # def get_parameter(self) -> Any:
-    #     """
-    #     Чтение одного параметра автопилота.
-    #     """
+    @abstractmethod
+    def get_parameter(self) -> Any:
+        """
+        Чтение одного параметра автопилота.
+        """
     
     # @abstractmethod
     # def get_parameters(self) -> Any:
