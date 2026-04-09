@@ -31,6 +31,8 @@ def main() -> None:
         config=config,
     )
     controller.set_backend(backend)
+    
+    controller.backend.get_all_parameters()
 
     print("Controller and backend created.")
     print(f"machine: id={controller.machine_id}, type={controller.machine_type}")
@@ -51,11 +53,10 @@ def main() -> None:
     
     time.sleep(5)
     controller.backend._set_mode(MavMode.manual)
-    print("Set mode to MANUAL.")
-
-    params: dict = controller.backend.get_all_parameters()
+    print("Set mode to MANUAL.")  
+    
     print("Parameters:")
-    for name, value in params.items():
+    for name, value in controller.machine_system_data.parameters.items():
         print(f"  {name}: {value}")
         
     controller.stop()

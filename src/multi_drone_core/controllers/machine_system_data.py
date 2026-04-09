@@ -889,7 +889,7 @@ class MachineSystemData:
         self.vfr_hud = VFRHUD()
         self.gps_raw_int = GPSRawInt()
         
-        self.machine_parameters: Dict[str, ParamValue] = {}
+        self.parameters: Dict[str, ParamValue] = {}
 
     def update_from_msg(self, msg_type: str, msg: MAVLink_message) -> None:
         if msg_type == "LOCAL_POSITION_NED":
@@ -931,12 +931,12 @@ class MachineSystemData:
         """
         param = ParamValue()
         param.update_from_message(msg)
-        self.machine_parameters[param.param_id] = param
+        self.parameters[param.param_id] = param
 
     def get_parameter(self, name: str) -> ParamValue | None:
-        return self.machine_parameters.get(name)
+        return self.parameters.get(name)
 
     def get_all_parameters(self) -> Dict[str, ParamValue]:
-        return self.machine_parameters.copy()
+        return self.parameters.copy()
 
         
