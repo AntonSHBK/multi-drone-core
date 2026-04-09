@@ -43,23 +43,23 @@ class BaseBackend(ABC):
         Корректное отключение backend и освобождение ресурсов.
         """
 
-    @abstractmethod
-    def send_command(self) -> Any:
-        """
-        Отправка унифицированной команды на дрон.
-        """
+    # @abstractmethod
+    # def send_command(self) -> Any:
+    #     """
+    #     Отправка унифицированной команды на дрон.
+    #     """
 
-    @abstractmethod
-    def set_parameter(self) -> Any:
-        """
-        Установка одного параметра автопилота.
-        """
+    # @abstractmethod
+    # def set_parameter(self) -> Any:
+    #     """
+    #     Установка одного параметра автопилота.
+    #     """
 
-    @abstractmethod
-    def get_parameter(self) -> Any:
-        """
-        Чтение одного параметра автопилота.
-        """
+    # @abstractmethod
+    # def get_parameter(self) -> Any:
+    #     """
+    #     Чтение одного параметра автопилота.
+    #     """
     
     # @abstractmethod
     # def get_parameters(self) -> Any:
