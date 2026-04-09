@@ -98,6 +98,65 @@ class MavlinkBackendConfig:
 
 
 class MavMode(str, Enum):
+    """
+    Перечисление режимов полёта PX4, используемых при переключении через MAVLink.
+
+    manual
+        Полностью ручной режим. Управление осуществляется напрямую стиками,
+        без стабилизации по позиции и высоте. Минимальная автоматизация.
+
+    stabilized
+        Режим стабилизации. Автопилот стабилизирует углы (roll/pitch),
+        но управление остаётся ручным. Высота и позиция не удерживаются автоматически.
+
+    acro
+        Акробатический режим. Управление по угловым скоростям.
+        Предназначен для опытных пилотов и агрессивных манёвров.
+
+    rattitude
+        Комбинированный режим: вблизи центра стиков работает как stabilized,
+        при больших отклонениях — как acro.
+
+    altctl
+        Altitude Control. Удержание высоты по барометру/датчикам.
+        Горизонтальное перемещение управляется вручную.
+
+    posctl
+        Position Control. Удержание позиции и высоты.
+        При отпускании стиков дрон зависает в текущей точке.
+        Полуавтоматический режим с ручным управлением.
+
+    loiter
+        Автоматический режим удержания позиции (Hold).
+        Дрон автономно удерживает текущую позицию без участия оператора.
+        Используется как безопасный режим ожидания.
+
+    mission
+        Выполнение загруженной миссии (AUTO_MISSION).
+        Автопилот самостоятельно проходит последовательность waypoint.
+
+    rtl
+        Return To Launch. Автоматическое возвращение к точке взлёта
+        с последующей посадкой или зависанием.
+
+    land
+        Автоматическая посадка в текущей точке.
+
+    rtgs
+        Return To Ground Station. Возврат к наземной станции (если поддерживается конфигурацией).
+
+    followme
+        Режим следования за движущейся целью (например, за оператором с GPS).
+
+    offboard
+        Внешнее управление. Дрон управляется внешним компьютером через
+        поток setpoint (MAVLink или ROS). Требует постоянного обновления команд.
+
+    takeoff
+        Автоматический взлёт на заданную высоту (AUTO_TAKEOFF).
+        После завершения обычно переходит в loiter или mission.
+    """
+
     manual = "MANUAL"
     stabilized = "STABILIZED"
     acro = "ACRO"
@@ -111,7 +170,7 @@ class MavMode(str, Enum):
     rtgs = "RTGS"
     followme = "FOLLOWME"
     offboard = "OFFBOARD"
-    takeoff = "TAKEOFF"    
+    takeoff = "TAKEOFF"
 
 
 class MavlinkBackend(BaseBackend):
@@ -552,7 +611,7 @@ class MavlinkBackend(BaseBackend):
             if time.time() - start_time > timeout:
                 break
 
-            msg: "MAVLink_param_value_message" = self._mavlink_connect.recv_match(
+            msg = self._mavlink_connect.recv_match(
                 type="PARAM_VALUE",
                 blocking=True,
                 timeout=1.0
@@ -561,7 +620,13 @@ class MavlinkBackend(BaseBackend):
             if msg is None:
                 continue
 
-            name = msg.param_id.rstrip(b"\x00").decode("ascii")
+            param_id = msg.param_id
+
+            if isinstance(param_id, bytes):
+                name = param_id.rstrip(b"\x00").decode("ascii")
+            else:
+                name = param_id.rstrip("\x00")
+
             params[name] = msg.param_value
 
             if expected_count is None:

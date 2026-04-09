@@ -48,20 +48,20 @@ def main() -> None:
     print("Set mode to MANUAL.")
     
     time.sleep(5)
-    controller.backend._set_mode(MavMode.stabilize)
+    controller.backend._set_mode(MavMode.stabilized)
     print("Set mode to STABILIZE.")
     
     time.sleep(5)
     controller.backend._set_mode(MavMode.manual)
     print("Set mode to MANUAL.")
-        
-    controller.stop()
-    print("Controller stopped.")
 
     params: dict = controller.backend.get_all_parameters()
     print("Parameters:")
     for name, value in params.items():
         print(f"  {name}: {value}")
+        
+    controller.stop()
+    print("Controller stopped.")
 
 if __name__ == "__main__":
     main()
