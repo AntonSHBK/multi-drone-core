@@ -599,8 +599,8 @@ class MavlinkBackend(BaseBackend):
     #         return msg.param_value
     #     return None
     
-    # def get_all_parameters(self, timeout: float = 5.0) -> Dict[str, float]:
-    #     self._mavlink_connect.param_fetch_all()
+    def get_all_parameters(self) -> Dict[str, float]:
+        self._mavlink_connect.param_fetch_all()
 
     def log_error(self, message: str) -> None:
         self.logger.error(message)

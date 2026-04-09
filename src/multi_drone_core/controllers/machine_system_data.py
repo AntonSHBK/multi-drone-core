@@ -827,7 +827,7 @@ class GPSRawInt(MAVLink_gps_raw_int_message):
 class ParamValue(MAVLink_param_value_message):
     def __init__(
         self,
-        param_id: Optional[str] = None,
+        param_id: Optional[bytes] = None,
         param_value: Optional[float] = None,
         param_type: Optional[int] = None,
         param_count: Optional[int] = None,

@@ -31,8 +31,6 @@ def main() -> None:
         config=config,
     )
     controller.set_backend(backend)
-    
-    controller.backend.get_all_parameters()
 
     print("Controller and backend created.")
     print(f"machine: id={controller.machine_id}, type={controller.machine_type}")
@@ -41,6 +39,8 @@ def main() -> None:
     
     controller.start()
     print("Controller started.")
+    
+    controller.backend.get_all_parameters()
     
     time.sleep(5)
     
