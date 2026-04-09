@@ -1,5 +1,5 @@
 import json
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Dict
 
 from pymavlink.dialects.v10.ardupilotmega import (
     MAVLink_message,
@@ -18,6 +18,7 @@ from pymavlink.dialects.v10.ardupilotmega import (
     MAVLink_highres_imu_message,
     MAVLink_vfr_hud_message,
     MAVLink_gps_raw_int_message,
+    MAVLink_param_value_message
 )
 
 
@@ -823,6 +824,53 @@ class GPSRawInt(MAVLink_gps_raw_int_message):
         )
 
 
+class ParamValue(MAVLink_param_value_message):
+    def __init__(
+        self,
+        param_id: Optional[str] = None,
+        param_value: Optional[float] = None,
+        param_type: Optional[int] = None,
+        param_count: Optional[int] = None,
+        param_index: Optional[int] = None,
+    ) -> None:
+        """
+        Параметры:
+        - param_id: Имя параметра (строка, до 16 символов).
+        - param_value: Значение параметра (float).
+        - param_type: Тип параметра (MAV_PARAM_TYPE_*).
+        - param_count: Общее количество параметров на автопилоте.
+        - param_index: Индекс текущего параметра.
+        """
+        super().__init__(
+            param_id=param_id,
+            param_value=param_value,
+            param_type=param_type,
+            param_count=param_count,
+            param_index=param_index,
+        )
+
+    def update_from_message(self, message: MAVLink_param_value_message) -> None:
+        """
+        Обновить объект на основе входящего MAVLink_param_value_message.
+        """
+        self.param_id = message.param_id
+        self.param_value = message.param_value
+        self.param_type = message.param_type
+        self.param_count = message.param_count
+        self.param_index = message.param_index
+
+    def __repr__(self) -> str:
+        return (
+            f"ParamValue("
+            f"id='{self.param_id}', "
+            f"value={self.param_value}, "
+            f"type={self.param_type}, "
+            f"count={self.param_count}, "
+            f"index={self.param_index}"
+            f")"
+        )
+
+
 class MachineSystemData:
     def __init__(self) -> None:
         self.sys_status = SysStatus()
@@ -840,6 +888,8 @@ class MachineSystemData:
         self.highres_imu = HighresIMU()
         self.vfr_hud = VFRHUD()
         self.gps_raw_int = GPSRawInt()
+        
+        self.machine_parameters: Dict[str, ParamValue] = {}
 
     def update_from_msg(self, msg_type: str, msg: MAVLink_message) -> None:
         if msg_type == "LOCAL_POSITION_NED":
@@ -870,7 +920,23 @@ class MachineSystemData:
             self.gps_raw_int.update_from_message(msg)
         elif msg_type == "HIGHRES_IMU":
             self.highres_imu.update_from_message(msg)
+        elif msg_type == "PARAM_VALUE":
+            self._update_parameter(msg)
         else:
             return
-        
+
+    def _update_parameter(self, msg: MAVLink_param_value_message) -> None:
+        """
+        Обновление или добавление параметра в словарь.
+        """
+        param = ParamValue()
+        param.update_from_message(msg)
+        self.machine_parameters[param.param_id] = param
+
+    def get_parameter(self, name: str) -> ParamValue | None:
+        return self.machine_parameters.get(name)
+
+    def get_all_parameters(self) -> Dict[str, ParamValue]:
+        return self.machine_parameters.copy()
+
         

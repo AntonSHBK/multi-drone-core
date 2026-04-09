@@ -592,50 +592,15 @@ class MavlinkBackend(BaseBackend):
             parm_type=parm_type
         )
         
-    def get_parameter(self, parm_name: int | str) -> Optional[float]:
-        self._mavlink_connect.param_fetch_one(parm_name)
-        msg: "MAVLink_param_value_message" = self._mavlink_connect.recv_match(type='PARAM_VALUE', blocking=True, timeout=2.0)
-        if msg is not None:
-            return msg.param_value
-        return None
+    # def get_parameter(self, parm_name: int | str) -> Optional[float]:
+    #     self._mavlink_connect.param_fetch_one(parm_name)
+    #     msg: "MAVLink_param_value_message" = self._mavlink_connect.recv_match(type='PARAM_VALUE', blocking=True, timeout=2.0)
+    #     if msg is not None:
+    #         return msg.param_value
+    #     return None
     
-    def get_all_parameters(self, timeout: float = 5.0) -> Dict[str, float]:
-        params: Dict[str, float] = {}
-
-        self._mavlink_connect.param_fetch_all()
-
-        start_time = time.time()
-        expected_count = None
-
-        while True:
-            if time.time() - start_time > timeout:
-                break
-
-            msg = self._mavlink_connect.recv_match(
-                type="PARAM_VALUE",
-                blocking=True,
-                timeout=1.0
-            )
-
-            if msg is None:
-                continue
-
-            param_id = msg.param_id
-
-            if isinstance(param_id, bytes):
-                name = param_id.rstrip(b"\x00").decode("ascii")
-            else:
-                name = param_id.rstrip("\x00")
-
-            params[name] = msg.param_value
-
-            if expected_count is None:
-                expected_count = msg.param_count
-
-            if expected_count is not None and len(params) >= expected_count:
-                break
-
-        return params
+    # def get_all_parameters(self, timeout: float = 5.0) -> Dict[str, float]:
+    #     self._mavlink_connect.param_fetch_all()
 
     def log_error(self, message: str) -> None:
         self.logger.error(message)

@@ -42,8 +42,6 @@ def main() -> None:
     
     time.sleep(5)
     
-    controller.backend: "MavlinkBackend" = controller.backend
-    
     controller.backend._set_mode(MavMode.manual)
     print("Set mode to MANUAL.")
     
