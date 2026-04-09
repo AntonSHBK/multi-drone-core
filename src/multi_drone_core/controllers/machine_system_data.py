@@ -824,14 +824,14 @@ class GPSRawInt(MAVLink_gps_raw_int_message):
         )
 
 
-class ParamValue(MAVLink_param_value_message):
+class ParamValue:
     def __init__(
         self,
-        param_id: Optional[bytes],
-        param_value: Optional[float],
-        param_type: Optional[int],
-        param_count: Optional[int],
-        param_index: Optional[int],
+        param_id: Optional[str] = None,
+        param_value: Optional[float] = None,
+        param_type: Optional[int] = None,
+        param_count: Optional[int] = None,
+        param_index: Optional[int] = None,
     ) -> None:
         """
         Параметры:
@@ -841,12 +841,23 @@ class ParamValue(MAVLink_param_value_message):
         - param_count: Общее количество параметров на автопилоте.
         - param_index: Индекс текущего параметра.
         """
-        super().__init__(
-            param_id=param_id,
-            param_value=param_value,
-            param_type=param_type,
-            param_count=param_count,
-            param_index=param_index,
+        self.param_id = param_id
+        self.param_value = param_value
+        self.param_type = param_type
+        self.param_count = param_count
+        self.param_index = param_index
+        
+    @classmethod
+    def from_message(cls, message: MAVLink_param_value_message) -> "ParamValue":    
+        """
+        Создать объект ParamValue на основе MAVLink_param_value_message.
+        """
+        return cls(
+            param_id=message.param_id,
+            param_value=message.param_value,
+            param_type=message.param_type,
+            param_count=message.param_count,
+            param_index=message.param_index,
         )
 
     def update_from_message(self, message: MAVLink_param_value_message) -> None:
@@ -929,13 +940,7 @@ class MachineSystemData:
         """
         Обновление или добавление параметра в словарь.
         """
-        param = ParamValue(
-            param_id=msg.param_id,
-            param_value=msg.param_value,
-            param_type=msg.param_type,
-            param_count=msg.param_count,
-            param_index=msg.param_index,
-        )
+        param = ParamValue.from_message(msg)
         self.parameters[param.param_id] = param
 
     def get_parameter(self, name: str) -> ParamValue | None:
