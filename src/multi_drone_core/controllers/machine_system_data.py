@@ -827,11 +827,11 @@ class GPSRawInt(MAVLink_gps_raw_int_message):
 class ParamValue(MAVLink_param_value_message):
     def __init__(
         self,
-        param_id: Optional[bytes] = None,
-        param_value: Optional[float] = None,
-        param_type: Optional[int] = None,
-        param_count: Optional[int] = None,
-        param_index: Optional[int] = None,
+        param_id: Optional[bytes],
+        param_value: Optional[float],
+        param_type: Optional[int],
+        param_count: Optional[int],
+        param_index: Optional[int],
     ) -> None:
         """
         Параметры:
@@ -929,8 +929,13 @@ class MachineSystemData:
         """
         Обновление или добавление параметра в словарь.
         """
-        param = ParamValue()
-        param.update_from_message(msg)
+        param = ParamValue(
+            param_id=msg.param_id,
+            param_value=msg.param_value,
+            param_type=msg.param_type,
+            param_count=msg.param_count,
+            param_index=msg.param_index,
+        )
         self.parameters[param.param_id] = param
 
     def get_parameter(self, name: str) -> ParamValue | None:
