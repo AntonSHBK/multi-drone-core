@@ -220,7 +220,10 @@ class OffboardCommander:
         target_state.update_position(current_pos_ned, system=self.target_orientation_system)
         target_state.reset_velocity()
         target_state.reset_acceleration()
-        target_state.update_orientation(current_orient_quat_ned, system=self.target_orientation_system)
+        target_state.update_orientation_quaternion(
+            current_orient_quat_ned,
+            system=self.target_orientation_system,
+        )
 
         self._position = current_pos_ned.copy()
         self._velocity = None

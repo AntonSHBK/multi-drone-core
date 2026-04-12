@@ -395,6 +395,10 @@ class MavlinkBackend(BaseBackend):
                     q2 = self.controller.machine_system_data.attitude_quaternion.q2
                     q3 = self.controller.machine_system_data.attitude_quaternion.q3
                     q4 = self.controller.machine_system_data.attitude_quaternion.q4
+
+                    ax = self.controller.machine_system_data.highres_imu.xacc
+                    ay = self.controller.machine_system_data.highres_imu.yacc
+                    az = self.controller.machine_system_data.highres_imu.zacc
                     
                 if not any(math.isnan(v) for v in (x, y, z, vx, vy, vz)):
                     self.controller.current_state.update_position(
@@ -405,11 +409,17 @@ class MavlinkBackend(BaseBackend):
                         np.array([vx, vy, vz], dtype=float),
                         system="local_NED",
                     )
+
+                if not any(math.isnan(v) for v in (ax, ay, az)):
+                    self.controller.current_state.update_acceleration(
+                        np.array([ax, ay, az], dtype=float),
+                        system="local_NED",
+                    )
                 
                 if not any(math.isnan(v) for v in (q1, q2, q3, q4)):
                     # MAVLink ATTITUDE_QUATERNION: q1=w, q2=x, q3=y, q4=z
                     q = np.array([q2, q3, q4, q1], dtype=float)
-                    self.controller.current_state.update_orientation(q, system="local_NED")
+                    self.controller.current_state.update_orientation_quaternion(q, system="local_NED")
 
             except Exception as exc:
                 self.log_warning(f"MAVLink local update error: {exc}")
@@ -622,4 +632,3 @@ class MavlinkBackend(BaseBackend):
         self.logger.info(message)
         
     
-

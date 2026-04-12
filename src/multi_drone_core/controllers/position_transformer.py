@@ -478,13 +478,6 @@ class DroneLocalityState():
         else:
             raise ValueError(f"Unknown system: {system}")
 
-    def update_orientation(
-        self,
-        array_q: np.ndarray,
-        system: CoordinateSystem = "local_NED",
-    ):
-        self.update_orientation_quaternion(array_q, system=system)
-    
     def reset_orientation(self):
         self.orientation_local_ENU.update_from_euler(roll=0.0, pitch=0.0, yaw=0.0)
         self.orientation_local_NED.update_from_euler(roll=0.0, pitch=0.0, yaw=0.0)

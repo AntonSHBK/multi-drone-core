@@ -434,7 +434,7 @@ class Ros2Backend(BaseBackend):
 
     def _task_update_orientation(self) -> None:
         try:
-            self.controller.current_state.update_orientation(
+            self.controller.current_state.update_orientation_quaternion(
                 self._buffer_quaternion,
                 system="local_NED",
             )
