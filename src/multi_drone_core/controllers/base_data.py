@@ -4,6 +4,7 @@ from scipy.spatial.transform import Rotation
 from multi_drone_core.utils.geometry import (
     rotate_ENU_NED,
     rotated_ENU_NED_quaternion,
+    rotated_ENU_NED_euler,
     transform_coordinates,
     transform_orientation    
 )
@@ -106,7 +107,7 @@ class EulerData(BaseData):
 
         :return: numpy массив [x, y, z, w], представляющий кватернион.
         """
-        quaternion = Rotation.from_euler('zyx', self._euler, degrees=False).as_quat()
+        quaternion = Rotation.from_euler('xyz', self._euler, degrees=False).as_quat()
         return quaternion
 
     def update_from_quaternion(self, quaternion: np.ndarray):
@@ -117,21 +118,21 @@ class EulerData(BaseData):
         """
         if quaternion.shape != (4,):
             raise ValueError(f"Ожидается массив размерности (4,), получено {quaternion.shape}")
-        euler_angles = Rotation.from_quat(quaternion).as_euler('zyx', degrees=False)
+        euler_angles = Rotation.from_quat(quaternion).as_euler('xyz', degrees=False)
         self.update_from_array(euler_angles)
     
     def to_ENU(self):
-        return rotated_ENU_NED_quaternion(self.to_array())
+        return rotated_ENU_NED_euler(self.to_array(), order="xyz")
     
     def to_NED(self):
-        return rotated_ENU_NED_quaternion(self.to_array())
+        return rotated_ENU_NED_euler(self.to_array(), order="xyz")
     
     def to_global(self, reference_orientation):
         return transform_orientation(
             source_orientation=self.to_array(),
             reference_orientation=reference_orientation,
             mode='euler',
-            euler_order='zyx',       
+            euler_order='xyz',       
             transform_type='local_to_global')
     
     def to_local(self, reference_orientation):
@@ -139,7 +140,7 @@ class EulerData(BaseData):
             source_orientation=self.to_array(),
             reference_orientation=reference_orientation,
             mode='euler',     
-            euler_order='zyx',     
+            euler_order='xyz',     
             transform_type='global_to_local') 
     
     def __call__(self):
@@ -150,6 +151,13 @@ class EulerData(BaseData):
 
     def __repr__(self):
         return f"EulerData(roll={self.roll}, pitch={self.pitch}, yaw={self.yaw})"
+
+    def to_dict(self):
+        return {
+            "roll": self.roll,
+            "pitch": self.pitch,
+            "yaw": self.yaw,
+        }
 
 
 class PositionData(BaseData):
@@ -251,6 +259,13 @@ class PositionData(BaseData):
     
     def __repr__(self):
         return f"Position(x={self.x}, y={self.y}, z={self.z})"
+
+    def to_dict(self):
+        return {
+            "x": self.x,
+            "y": self.y,
+            "z": self.z,
+        }
 
 
 class VelocityData(BaseData):
@@ -357,6 +372,126 @@ class VelocityData(BaseData):
 
     def __repr__(self):
         return f"Velocity(vx={self.vx}, vy={self.vy}, vz={self.vz})"
+
+    def to_dict(self):
+        return {
+            "vx": self.vx,
+            "vy": self.vy,
+            "vz": self.vz,
+        }
+
+
+class AccelerationData(BaseData):
+    """
+    Класс для представления ускорения в пространстве (ax, ay, az), адаптированный для использования с numpy.
+
+    Атрибуты:
+    - ax (float): Ускорение по оси X.
+    - ay (float): Ускорение по оси Y.
+    - az (float): Ускорение по оси Z.
+    """
+
+    def __init__(self, ax=0.0, ay=0.0, az=0.0):
+        self._acceleration = np.array([self._validate_and_convert(ax),
+                                       self._validate_and_convert(ay),
+                                       self._validate_and_convert(az)])
+
+    @property
+    def ax(self):
+        return self._acceleration[0]
+
+    @ax.setter
+    def ax(self, value):
+        self._acceleration[0] = self._validate_and_convert(value)
+
+    @property
+    def ay(self):
+        return self._acceleration[1]
+
+    @ay.setter
+    def ay(self, value):
+        self._acceleration[1] = self._validate_and_convert(value)
+
+    @property
+    def az(self):
+        return self._acceleration[2]
+
+    @az.setter
+    def az(self, value):
+        self._acceleration[2] = self._validate_and_convert(value)
+
+    def to_array(self) -> np.ndarray:
+        """
+        Возвращает ускорение как numpy массив.
+        """
+        return self._acceleration.copy()
+
+    def update(self, ax=None, ay=None, az=None):
+        """
+        Обновляет ускорение, если переданы новые значения.
+
+        :param ax: Новое значение ускорения по оси X.
+        :param ay: Новое значение ускорения по оси Y.
+        :param az: Новое значение ускорения по оси Z.
+        """
+        if ax is not None:
+            self.ax = ax
+        if ay is not None:
+            self.ay = ay
+        if az is not None:
+            self.az = az
+
+    def update_from_array(self, array: np.ndarray):
+        """
+        Обновляет ускорение из numpy массива.
+
+        :param array: numpy массив размером 3, содержащий [ax, ay, az].
+        """
+        if not isinstance(array, np.ndarray) or array.shape != (3,):
+            raise ValueError("Ожидается numpy массив размером (3,) для [ax, ay, az].")
+        self._acceleration[:] = np.array([
+            self._validate_and_convert(array[0]),
+            self._validate_and_convert(array[1]),
+            self._validate_and_convert(array[2])
+        ])
+        
+    def to_ENU(self):
+        return rotate_ENU_NED(self.to_array())
+    
+    def to_NED(self):
+        return rotate_ENU_NED(self.to_array())
+    
+    def to_global(self, reference_orientation, rotation_type='quaternion'):
+        return transform_coordinates(
+            source_position=self.to_array(),
+            reference_position=np.asarray([0, 0, 0]),
+            reference_orientation=reference_orientation,
+            transform_type='local_to_global',
+            rotation_type=rotation_type)
+    
+    def to_local(self, reference_orientation, rotation_type='quaternion'):
+        return transform_coordinates(
+            source_position=self.to_array(),
+            reference_position=np.asarray([0, 0, 0]),
+            reference_orientation=reference_orientation,
+            transform_type='global_to_local',
+            rotation_type=rotation_type)
+    
+    def __call__(self):
+        """
+        Возвращает ускорение как массив numpy при вызове объекта.
+        """
+        return self.to_array()
+
+    def __repr__(self):
+        return f"Acceleration(ax={self.ax}, ay={self.ay}, az={self.az})"
+
+    def to_dict(self):
+        return {
+            "ax": self.ax,
+            "ay": self.ay,
+            "az": self.az,
+        }
 
 
 class QuaternionData(BaseData):
@@ -469,8 +604,7 @@ class QuaternionData(BaseData):
         Returns:
         np.ndarray: Массив numpy [roll, pitch, yaw] в радианах.
         """
-        # Преобразуем кватернион в углы Эйлера
-        euler_angles = Rotation.from_quat(self._quaternion).as_euler('zyx', degrees=False)
+        euler_angles = Rotation.from_quat(self._quaternion).as_euler('xyz', degrees=False)
         return euler_angles
 
     def update_from_euler(self, euler: np.ndarray):
@@ -513,6 +647,14 @@ class QuaternionData(BaseData):
     def __repr__(self):
         return f"QuaternionData(x={self.x}, y={self.y}, z={self.z}, w={self.w})"
 
+    def to_dict(self):
+        return {
+            "x": self.x,
+            "y": self.y,
+            "z": self.z,
+            "w": self.w,
+        }
+
 
 class OrientationData:
     """
@@ -526,7 +668,11 @@ class OrientationData:
     def __init__(self, roll=0.0, pitch=0.0, yaw=0.0, x=0.0, y=0.0, z=0.0, w=1.0):
         self.euler = EulerData(roll, pitch, yaw)
         self.quaternion = QuaternionData(x, y, z, w)
-        self._sync_quaternion_from_euler()
+
+        if (x, y, z, w) != (0.0, 0.0, 0.0, 1.0):
+            self._sync_euler_from_quaternion()
+        else:
+            self._sync_quaternion_from_euler()
 
     def _sync_quaternion_from_euler(self):
         """Синхронизирует кватернион с текущими углами Эйлера."""

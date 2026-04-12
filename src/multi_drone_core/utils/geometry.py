@@ -26,8 +26,34 @@ def rotated_ENU_NED_quaternion(q: np.ndarray) -> np.ndarray:
     """
     if q.shape != (4,):
         raise ValueError("Кватернион должен быть массивом с 4 элементами.")
-    q = np.array([q[1], q[0], -q[2], q[3]])
-    return q
+
+    enu_to_ned = np.array([
+        [0.0, 1.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [0.0, 0.0, -1.0],
+    ])
+    rotation = R.from_matrix(enu_to_ned) * R.from_quat(q)
+    return rotation.as_quat()
+
+
+def rotated_ENU_NED_euler(euler: np.ndarray, order: str = "xyz") -> np.ndarray:
+    """
+    Преобразует углы Эйлера из системы координат ENU в NED и наоборот.
+
+    :param euler: Углы Эйлера в формате np.array([roll, pitch, yaw]).
+    :param order: Порядок осей для углов Эйлера (по умолчанию "xyz").
+    :return: Преобразованные углы Эйлера в формате np.array([roll, pitch, yaw]).
+    """
+    if euler.shape != (3,):
+        raise ValueError("Углы Эйлера должны быть массивом с 3 элементами.")
+
+    enu_to_ned = np.array([
+        [0.0, 1.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [0.0, 0.0, -1.0],
+    ])
+    rotation = R.from_matrix(enu_to_ned) * R.from_euler(order, euler)
+    return rotation.as_euler(order)
 
 
 def transform_coordinates(
@@ -36,7 +62,7 @@ def transform_coordinates(
     reference_orientation: Union[np.ndarray, list],
     transform_type: Literal["local_to_global", "global_to_local"],
     rotation_type: Literal["euler", "quaternion"] = "euler",
-    sequence: str = "zyx",
+    sequence: str = "xyz",
 ) -> np.ndarray:
     """
     Преобразует координаты между локальной и глобальной системами.
@@ -44,11 +70,11 @@ def transform_coordinates(
     :param source_position: Исходная позиция в виде np.ndarray [x, y, z].
     :param reference_position: Позиция центра координат в другой системе в виде np.ndarray [x, y, z].
     :param reference_orientation: Ориентация центра:
-        - Если rotation_type='euler': ориентация в виде np.ndarray [yaw, pitch, roll] (в радианах).
+        - Если rotation_type='euler': ориентация в виде np.ndarray [roll, pitch, yaw] (в радианах).
         - Если rotation_type='quaternion': ориентация в виде np.ndarray [x, y, z, w].
     :param transform_type: Тип преобразования: 'local_to_global' или 'global_to_local'.
     :param rotation_type: Тип вращения: 'euler' (по умолчанию) или 'quaternion'.
-    :param sequence: Последовательность вращений для углов Эйлера (по умолчанию 'zyx').
+    :param sequence: Последовательность вращений для углов Эйлера (по умолчанию 'xyz').
     :return: Преобразованная позиция в виде np.ndarray [x, y, z].
     """
     if rotation_type == "euler":
@@ -76,7 +102,7 @@ def transform_orientation(
         reference_orientation: np.ndarray,
         transform_type: Literal["local_to_global", "global_to_local"],
         mode: Literal["quaternion", "euler"] = "quaternion",
-        euler_order: str = "zyx"
+        euler_order: str = "xyz"
     ) -> np.ndarray:
     """
     Преобразует ориентацию между локальной и глобальной системами координат.
@@ -94,7 +120,7 @@ def transform_orientation(
     - mode (Literal): Тип ориентации:
         - "quaternion" — преобразование кватернионов.
         - "euler" — преобразование углов Эйлера.
-    - euler_order (str): Порядок осей для углов Эйлера (по умолчанию "zyx").
+    - euler_order (str): Порядок осей для углов Эйлера (по умолчанию "xyz").
 
     Возвращает:
     - np.ndarray: Преобразованная ориентация.

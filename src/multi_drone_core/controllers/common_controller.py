@@ -24,7 +24,7 @@ class CommonController(BaseController):
             machine_id=machine_id,
             machine_type=machine_type,
             world_position_enu=world_position_enu,
-            world_orientation_rpy=world_orientation_rpy,
+            world_orientation_enu_rpy=world_orientation_rpy,
             max_command_queue=max_command_queue,
         )
         self._logger = self.loggers.controller

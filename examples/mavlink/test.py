@@ -15,7 +15,7 @@ def _bootstrap_local_path() -> None:
 
 _bootstrap_local_path()
 
-from multi_drone_core.backend.mavlink.handler import MavlinkBackend, MavlinkBackendConfig, MavMode
+from multi_drone_core.backend.mavlink.handler import MavlinkBackend, MavlinkBackendConfig, MavModes
 from multi_drone_core.controllers.common_controller import CommonController
 
 def main() -> None:  
@@ -44,15 +44,15 @@ def main() -> None:
     
     time.sleep(5)
     
-    controller.backend._set_mode(MavMode.manual)
+    controller.backend._set_mode(MavModes.manual)
     print("Set mode to MANUAL.")
     
     time.sleep(5)
-    controller.backend._set_mode(MavMode.stabilized)
+    controller.backend._set_mode(MavModes.stabilized)
     print("Set mode to STABILIZE.")
     
     time.sleep(5)
-    controller.backend._set_mode(MavMode.manual)
+    controller.backend._set_mode(MavModes.manual)
     print("Set mode to MANUAL.")  
     
     print("Parameters:")

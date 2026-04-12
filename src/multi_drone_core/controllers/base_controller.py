@@ -25,7 +25,7 @@ class BaseController(ABC):
         machine_id: int,
         machine_type: str = 'default',
         world_position_enu: np.ndarray = [0.0, 0.0, 0.0],
-        world_orientation_rpy: np.ndarray = [0.0, 0.0, 0.0],
+        world_orientation_enu_rpy: np.ndarray = [0.0, 0.0, 0.0],
         max_command_queue: int = 128,
         log_dir: Path = Path("logs"),
         log_level: str = "INFO",
@@ -44,7 +44,7 @@ class BaseController(ABC):
         )
 
         default_position = np.asarray( world_position_enu, dtype=float)
-        default_orientation = np.asarray(world_orientation_rpy, dtype=float)
+        default_orientation = np.asarray(world_orientation_enu_rpy, dtype=float)
 
         self.world_position_enu = PositionData(
             x=default_position[0],

@@ -1,18 +1,17 @@
 from time import sleep
-
-from px4_msgs.msg import VehicleStatus
+from abc import ABC, abstractmethod
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from multi_drone.controllers.x500.x500_base import X500BaseController
+    from multi_drone_core.controllers.base_controller import BaseController
 
 class DroneState(ABC):
     """
     Базовый класс для всех состояний дрона.
     """
-    def __init__(self, controller: "X500BaseController"):
+    def __init__(self, controller: "BaseController"):
         self.controller = controller
-        self.params = controller.params
+        self.logger = controller.loggers.controller
         self.counter = 0
 
     @abstractmethod
@@ -42,7 +41,7 @@ class IdleState(DroneState):
     Состояние ожидания (IDLE).
     """
     def enter(self):
-        self.controller.log_info("Переход в состояние IDLE.")
+        self.logger.info("Переход в состояние IDLE.")
         self.controller.params.reset()
 
     def handle(self):

@@ -825,6 +825,7 @@ class GPSRawInt(MAVLink_gps_raw_int_message):
 
 
 class ParamValue:
+    # TODO: Расширить класс, добавить ещё один класс котоырй булет именно группой параметров
     def __init__(
         self,
         param_id: Optional[str] = None,
@@ -903,6 +904,7 @@ class MachineSystemData:
         self.parameters: Dict[str, ParamValue] = {}
 
     def update_from_msg(self, msg_type: str, msg: MAVLink_message) -> None:
+        # TODO: Добавить таймер сколько времени прошло с момента последнего обновления каждого типа данных, чтобы можно было отслеживать "свежесть" информации.
         if msg_type == "LOCAL_POSITION_NED":
             self.local_position_ned.update_from_message(msg)
         elif msg_type == "POSITION_TARGET_LOCAL_NED":
@@ -911,7 +913,7 @@ class MachineSystemData:
             self.sys_status.update_from_message(msg)
         elif msg_type == "ATTITUDE":
             self.attitude.update_from_message(msg)
-        elif msg_type == "Heartbeat":
+        elif msg_type == "HEARTBEAT":
             self.heartbeat.update_from_message(msg)
         elif msg_type == "ATTITUDE_QUATERNION":
             self.attitude_quaternion.update_from_message(msg)

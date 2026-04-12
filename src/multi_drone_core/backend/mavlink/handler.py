@@ -14,9 +14,9 @@ from pymavlink import mavutil
 
 from multi_drone_core.backend.base_backend import BaseBackend
 from multi_drone_core.backend.mavlink.connection import mavlink_connection
+from multi_drone_core.backend.mavlink.offboard import OffboardCommander
 
-if TYPE_CHECKING:
-    
+if TYPE_CHECKING:    
     from pymavlink.dialects.v10.ardupilotmega import MAVLink as MAVLink1
     from pymavlink.dialects.v10.ardupilotmega import MAVLink_message as MAVLink_message1 
     from pymavlink.dialects.v10.ardupilotmega import(
@@ -96,8 +96,11 @@ class MavlinkBackendConfig:
     # Тип автопилота для heartbeat
     heartbeat_autopilot: int = mavutil.mavlink.MAV_AUTOPILOT_INVALID
 
+    # Offboard setpoint send frequency (Hz), 5.0
+    offboard_setpoint_rate_hz: float = 10.0
 
-class MavMode(str, Enum):
+
+class MavModes(str, Enum):
     """
     Перечисление режимов полёта PX4, используемых при переключении через MAVLink.
 
@@ -192,8 +195,6 @@ class MavlinkBackend(BaseBackend):
         self._mavlink: "MAVLink1" = None
         self._connected = False
         
-        # self._vehicle_status_local = VehicleStatusLocal()
-        
         self._buffer_lock = threading.Lock()
         # TODO сделать не словарь а класс с конкретными полями для каждого типа сообщений, которые нам нужны
         self._message_buffer: Dict[str, Any] = {}
@@ -202,10 +203,12 @@ class MavlinkBackend(BaseBackend):
         self._reader_thread: threading.Thread | None = None
         self._local_position_thread: threading.Thread | None = None
         self._heartbeat_thread: threading.Thread | None = None
+        
+        self.offboard_commander = OffboardCommander(self)
 
     @property
     def is_connected(self) -> bool:
-        return bool(self._connected and self.ping())
+        return bool(self._connected and self._mavlink_connect is not None)
 
     def connect(self) -> None:
         if self._connected:
@@ -424,139 +427,140 @@ class MavlinkBackend(BaseBackend):
 
             self._stop_event.wait(period)
     
-    def _send_long_command(
-        self,
-        command: int,
-        *,
-        param1: float = 0.0,
-        param2: float = 0.0,
-        param3: float = 0.0,
-        param4: float = 0.0,
-        param5: float = 0.0,
-        param6: float = 0.0,
-        param7: float = 0.0,
-        target_system: Optional[int] = None,
-        target_component: Optional[int] = None,
-        confirmation: int = 0,
-    ) -> Any:
-        """
-        Отправляет MAVLink-команду через COMMAND_LONG.
+    # TODO: Скорректировать методы отправки команд
+    # def _send_long_command(
+    #     self,
+    #     command: int,
+    #     *,
+    #     param1: float = 0.0,
+    #     param2: float = 0.0,
+    #     param3: float = 0.0,
+    #     param4: float = 0.0,
+    #     param5: float = 0.0,
+    #     param6: float = 0.0,
+    #     param7: float = 0.0,
+    #     target_system: Optional[int] = None,
+    #     target_component: Optional[int] = None,
+    #     confirmation: int = 0,
+    # ) -> Any:
+    #     """
+    #     Отправляет MAVLink-команду через COMMAND_LONG.
 
-        Parameters
-        ----------
-        command : int
-            Идентификатор MAV_CMD_*.
-        param1..param7 : float
-            Параметры команды (назначение зависит от command).
-        target_system : int | None
-            Целевой system id. Если None, используется target из heartbeat.
-        target_component : int | None
-            Целевой component id. Если None, используется target из heartbeat.
-        confirmation : int
-            Поле confirmation для повторной отправки/идемпотентности.
-        """
-        if self._mavlink_connect is None or not self._connected:
-            raise RuntimeError("MAVLink backend is not connected. Call connect() first.")
+    #     Parameters
+    #     ----------
+    #     command : int
+    #         Идентификатор MAV_CMD_*.
+    #     param1..param7 : float
+    #         Параметры команды (назначение зависит от command).
+    #     target_system : int | None
+    #         Целевой system id. Если None, используется target из heartbeat.
+    #     target_component : int | None
+    #         Целевой component id. Если None, используется target из heartbeat.
+    #     confirmation : int
+    #         Поле confirmation для повторной отправки/идемпотентности.
+    #     """
+    #     if self._mavlink_connect is None or not self._connected:
+    #         raise RuntimeError("MAVLink backend is not connected. Call connect() first.")
 
-        ts = int(target_system if target_system is not None else self._mavlink_connect.target_system)
-        tc = int(target_component if target_component is not None else self._mavlink_connect.target_component)
+    #     ts = int(target_system if target_system is not None else self._mavlink_connect.target_system)
+    #     tc = int(target_component if target_component is not None else self._mavlink_connect.target_component)
 
-        self._mavlink.command_long_send(
-            ts,
-            tc,
-            int(command),
-            int(confirmation),
-            float(param1),
-            float(param2),
-            float(param3),
-            float(param4),
-            float(param5),
-            float(param6),
-            float(param7),
-        )        
-        response = self._mavlink_connect.recv_match(type='COMMAND_ACK', blocking=True)
-        self.log_info(
-            f"Sent COMMAND_LONG: command={command}, target={ts}:{tc}, "
-            f"params=[{param1}, {param2}, {param3}, {param4}, {param5}, {param6}, {param7}], "
-            f"confirmation={confirmation}"
-        )
-        return response
+    #     self._mavlink.command_long_send(
+    #         ts,
+    #         tc,
+    #         int(command),
+    #         int(confirmation),
+    #         float(param1),
+    #         float(param2),
+    #         float(param3),
+    #         float(param4),
+    #         float(param5),
+    #         float(param6),
+    #         float(param7),
+    #     )        
+    #     response = self._mavlink_connect.recv_match(type='COMMAND_ACK', blocking=True)
+    #     self.log_info(
+    #         f"Sent COMMAND_LONG: command={command}, target={ts}:{tc}, "
+    #         f"params=[{param1}, {param2}, {param3}, {param4}, {param5}, {param6}, {param7}], "
+    #         f"confirmation={confirmation}"
+    #     )
+    #     return response
 
-    def _send_int_command(
-        self,
-        command: int,
-        *,
-        frame: int = mavutil.mavlink.MAV_FRAME_GLOBAL_INT,
-        x: int = 0,
-        y: int = 0,
-        z: float = 0.0,
-        param1: float = 0.0,
-        param2: float = 0.0,
-        param3: float = 0.0,
-        param4: float = 0.0,
-        current: int = 0,
-        autocontinue: int = 0,
-        target_system: Optional[int] = None,
-        target_component: Optional[int] = None,
-    ) -> Any:
-        """
-        Отправляет MAVLink-команду через COMMAND_INT.
+    # def _send_int_command(
+    #     self,
+    #     command: int,
+    #     *,
+    #     frame: int = mavutil.mavlink.MAV_FRAME_GLOBAL_INT,
+    #     x: int = 0,
+    #     y: int = 0,
+    #     z: float = 0.0,
+    #     param1: float = 0.0,
+    #     param2: float = 0.0,
+    #     param3: float = 0.0,
+    #     param4: float = 0.0,
+    #     current: int = 0,
+    #     autocontinue: int = 0,
+    #     target_system: Optional[int] = None,
+    #     target_component: Optional[int] = None,
+    # ) -> Any:
+    #     """
+    #     Отправляет MAVLink-команду через COMMAND_INT.
 
-        Parameters
-        ----------
-        command : int
-            Идентификатор MAV_CMD_*.
-        frame : int
-            Система координат MAV_FRAME_*.
-        x : int
-            Обычно lat * 1e7 (для GLOBAL_INT кадров) или x в локальной системе.
-        y : int
-            Обычно lon * 1e7 (для GLOBAL_INT кадров) или y в локальной системе.
-        z : float
-            Высота/координата z.
-        param1..param4 : float
-            Доп. параметры команды.
-        current : int
-            Флаг current (совместимость с mission-полями).
-        autocontinue : int
-            Флаг autocontinue (совместимость с mission-полями).
-        target_system : int | None
-            Целевой system id. Если None, используется target из heartbeat.
-        target_component : int | None
-            Целевой component id. Если None, используется target из heartbeat.
-        """
-        if self._mavlink_connect is None or not self._connected:
-            raise RuntimeError("MAVLink backend is not connected. Call connect() first.")
+    #     Parameters
+    #     ----------
+    #     command : int
+    #         Идентификатор MAV_CMD_*.
+    #     frame : int
+    #         Система координат MAV_FRAME_*.
+    #     x : int
+    #         Обычно lat * 1e7 (для GLOBAL_INT кадров) или x в локальной системе.
+    #     y : int
+    #         Обычно lon * 1e7 (для GLOBAL_INT кадров) или y в локальной системе.
+    #     z : float
+    #         Высота/координата z.
+    #     param1..param4 : float
+    #         Доп. параметры команды.
+    #     current : int
+    #         Флаг current (совместимость с mission-полями).
+    #     autocontinue : int
+    #         Флаг autocontinue (совместимость с mission-полями).
+    #     target_system : int | None
+    #         Целевой system id. Если None, используется target из heartbeat.
+    #     target_component : int | None
+    #         Целевой component id. Если None, используется target из heartbeat.
+    #     """
+    #     if self._mavlink_connect is None or not self._connected:
+    #         raise RuntimeError("MAVLink backend is not connected. Call connect() first.")
 
-        ts = int(target_system if target_system is not None else self._mavlink_connect.target_system)
-        tc = int(target_component if target_component is not None else self._mavlink_connect.target_component)
+    #     ts = int(target_system if target_system is not None else self._mavlink_connect.target_system)
+    #     tc = int(target_component if target_component is not None else self._mavlink_connect.target_component)
 
-        self._mavlink.command_int_send(
-            ts,
-            tc,
-            int(frame),
-            int(command),
-            int(current),
-            int(autocontinue),
-            float(param1),
-            float(param2),
-            float(param3),
-            float(param4),
-            int(x),
-            int(y),
-            float(z),
-        )
+    #     self._mavlink.command_int_send(
+    #         ts,
+    #         tc,
+    #         int(frame),
+    #         int(command),
+    #         int(current),
+    #         int(autocontinue),
+    #         float(param1),
+    #         float(param2),
+    #         float(param3),
+    #         float(param4),
+    #         int(x),
+    #         int(y),
+    #         float(z),
+    #     )
         
-        response = self._mavlink_connect.recv_match(type='COMMAND_ACK', blocking=True)
+    #     response = self._mavlink_connect.recv_match(type='COMMAND_ACK', blocking=True)
         
-        self.log_info(
-            f"Sent COMMAND_INT: command={command}, frame={frame}, target={ts}:{tc}, "
-            f"params=[{param1}, {param2}, {param3}, {param4}], "
-            f"current={current}, autocontinue={autocontinue}, "
-            f"x={x}, y={y}, z={z}"
-        )
+    #     self.log_info(
+    #         f"Sent COMMAND_INT: command={command}, frame={frame}, target={ts}:{tc}, "
+    #         f"params=[{param1}, {param2}, {param3}, {param4}], "
+    #         f"current={current}, autocontinue={autocontinue}, "
+    #         f"x={x}, y={y}, z={z}"
+    #     )
 
-        return response 
+    #     return response 
     
     def _heartbeat_send(self) -> None:
         # https://mavlink.io/en/services/heartbeat.html
@@ -566,7 +570,7 @@ class MavlinkBackend(BaseBackend):
              0, 0, 0
         )
         
-    def _set_mode_send(self, mode: MavMode) -> None:
+    def _set_mode_send(self, mode: MavModes) -> None:
         mode_id = self._mavlink_connect.mode_mapping().get(mode)
         if mode_id is None:
             raise ValueError(f"Unknown mode '{mode}' for current MAVLink target.")
@@ -577,7 +581,7 @@ class MavlinkBackend(BaseBackend):
             mode_id,
         )
     
-    def _set_mode(self, mode: MavMode) -> None:
+    def _set_mode(self, mode: MavModes) -> None:
         self._mavlink_connect.set_mode(mode)
         
     def set_parameter(
@@ -599,6 +603,12 @@ class MavlinkBackend(BaseBackend):
     #         return msg.param_value
     #     return None
     
+    def offboard_start(self):        
+        self.offboard_commander.start()
+    
+    def offboard_stop(self):
+        self.offboard_commander.stop()
+    
     def get_all_parameters(self) -> Dict[str, float]:
         self._mavlink_connect.param_fetch_all()
 
@@ -610,3 +620,6 @@ class MavlinkBackend(BaseBackend):
 
     def log_info(self, message: str) -> None:
         self.logger.info(message)
+        
+    
+
