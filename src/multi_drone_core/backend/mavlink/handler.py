@@ -86,19 +86,19 @@ class MavlinkBackendConfig:
     # Дополнительные параметры соединения
     connect_opts: dict[str, Any] = field(default_factory=dict)
     
-    # --- Параметры recv_match ---
+    # # --- Параметры recv_match ---
 
-    # Фильтр по типам MAVLink сообщений (например: "HEARTBEAT" или ["ATTITUDE", "LOCAL_POSITION_NED"])
-    recv_match_type: str | Iterable[str] | None = None
+    # # Фильтр по типам MAVLink сообщений (например: "HEARTBEAT" или ["ATTITUDE", "LOCAL_POSITION_NED"])
+    # recv_match_type: str | Iterable[str] | None = None
 
-    # Условие фильтрации (строка, вычисляемая относительно self.messages)
-    recv_match_condition: str | None = None
+    # # Условие фильтрации (строка, вычисляемая относительно self.messages)
+    # recv_match_condition: str | None = None
 
-    # Блокирующий режим ожидания сообщения
-    recv_match_blocking: bool = True
+    # # Блокирующий режим ожидания сообщения
+    # recv_match_blocking: bool = False
 
-    # Таймаут ожидания сообщения (в секундах)
-    recv_match_timeout: float | None = 0.5
+    # # Таймаут ожидания сообщения (в секундах)
+    # recv_match_timeout: float | None = None
     
     # --- Параметры локального обновления состояния ---
     
@@ -220,6 +220,7 @@ class MavlinkBackend(BaseBackend):
         self._message_buffer: Dict[str, Any] = {}
 
         self._stop_event = threading.Event()
+        self._reader_thread: threading.Thread | None = None
         self._local_position_thread: threading.Thread | None = None
         self._heartbeat_thread: threading.Thread | None = None
         
@@ -351,6 +352,12 @@ class MavlinkBackend(BaseBackend):
 
     def _start_background_workers(self) -> None:
         self._stop_event.clear()
+        
+        self._reader_thread = threading.Thread(
+            target=self._read_messages_loop,
+            name="mavlink-reader-thread",
+            daemon=True,
+        )
 
         self._local_position_thread = threading.Thread(
             target=self._machine_local_position_update_loop,
@@ -363,6 +370,7 @@ class MavlinkBackend(BaseBackend):
             daemon=True,
         )
         
+        self._reader_thread.start()
         self._heartbeat_thread.start()
         self._local_position_thread.start()
 
@@ -370,15 +378,27 @@ class MavlinkBackend(BaseBackend):
         self._stop_event.set()
 
         for thread in (
+            self._reader_thread,
             self._local_position_thread,
             self._heartbeat_thread,
         ):
             if thread is not None and thread.is_alive():
                 thread.join(timeout=2.0)
 
+        self._reader_thread = None
         self._heartbeat_thread = None
         self._local_position_thread = None
 
+    def _read_messages_loop(self) -> None:
+        # https://mavlink.io/en/mavgen_python/
+        while not self._stop_event.is_set():
+            try:
+                msg: "MAVLink_message1" = self._mavlink_connect.recv_match()
+
+            except Exception as exc:
+                self.log_warning(f"MAVLink reader error: {exc}")
+                self._stop_event.wait(0.0)
+    
     def _machine_local_position_update_loop(self) -> None:
         period = max(0.01, float(self._config.local_position_update_period_s))
 

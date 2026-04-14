@@ -40,6 +40,8 @@ class BaseController(ABC):
         log_level: str = "INFO",
         config: ControllerConfig = ControllerConfig(),
     ) -> None:
+        
+        # TODO: проверять id на уникальность
         self.machine_id = int(machine_id)
         self.machine_type = str(machine_type)
         self.machine_name = f"machine_{self.machine_id}"

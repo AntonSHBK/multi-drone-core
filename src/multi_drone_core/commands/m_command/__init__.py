@@ -11,7 +11,7 @@
 
 from .m_00 import M00_Stop
 from .m_01 import M01_Pause
-from .m_02 import M02_Continue, M02_EndMission
+from .m_02 import M02_Continue
 from .m_10 import M10_Arm
 from .m_11 import M11_Disarm
 from .m_12 import M12_Takeoff
