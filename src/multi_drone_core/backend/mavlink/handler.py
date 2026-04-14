@@ -117,6 +117,8 @@ class MavlinkBackendConfig:
 
     # Offboard setpoint send frequency (Hz), 5.0
     offboard_setpoint_rate_hz: float = 10.0
+    
+    wait_ready_timeout: float = 20
 
 
 class MavModes(str, Enum):
@@ -281,7 +283,7 @@ class MavlinkBackend(BaseBackend):
             )
             self._start_background_workers()
 
-            if not self.wait_ready():
+            if not self.wait_ready(self._config.wait_ready_timeout):
                 raise TimeoutError("MAVLink backend is not ready: timed out waiting for telemetry/parameters.")
 
             self._connected = True            
@@ -605,6 +607,14 @@ class MavlinkBackend(BaseBackend):
         heartbeat = self._mavlink_connect.messages.get("HEARTBEAT")
         if heartbeat is None:
             return "UNKNOWN"
+
+        autopilot = getattr(heartbeat, "autopilot", None)
+        base_mode = getattr(heartbeat, "base_mode", 0)
+        custom_mode = getattr(heartbeat, "custom_mode", 0)
+
+        if autopilot == mavutil.mavlink.MAV_AUTOPILOT_PX4:
+            return mavutil.interpret_px4_mode(base_mode, custom_mode)
+
         return mavutil.mode_string_v10(heartbeat)
        
     def offboard_start(self):        
