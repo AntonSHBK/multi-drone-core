@@ -49,6 +49,18 @@ class BaseBackend(ABC):
         """
         Gracefully stop backend and release resources.
         """
+
+    @abstractmethod
+    def wait_ready(
+        self,
+        timeout: float = 15.0,
+        poll_period_s: float = 0.05,
+    ) -> bool:
+        """
+        Wait until backend has received all required telemetry and initialization data.
+        Returns True when ready, otherwise False on timeout.
+        """
+
     @abstractmethod  
     def send_command(
         self,

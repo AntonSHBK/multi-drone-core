@@ -56,8 +56,9 @@ def main() -> None:
     print("Set mode to MANUAL.")  
     
     print("Parameters:")
-    for name, value in controller.get_all_parameters():
+    for name, value in controller.get_all_parameters().items():
         print(f"  {name}: {value}")
+
         
     controller.stop()
     print("Controller stopped.")

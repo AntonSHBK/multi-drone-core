@@ -240,6 +240,22 @@ class Ros2Backend(BaseBackend):
         self._subs_created = False
         self._pubs_created = False
 
+    def wait_ready(
+        self,
+        timeout: float = 15.0,
+        poll_period_s: float = 0.05,
+    ) -> bool:
+        timeout = max(0.1, float(timeout))
+        poll_period_s = max(0.01, float(poll_period_s))
+        deadline = time.time() + timeout
+
+        while time.time() < deadline:
+            if self._buffer_vessel_status is not None:
+                return True
+            time.sleep(poll_period_s)
+
+        return False
+
     def publish_vehicle_command(self, 
         command_id: int, 
         param1: float = 0.0, 

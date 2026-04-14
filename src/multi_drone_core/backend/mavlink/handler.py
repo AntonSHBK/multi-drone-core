@@ -279,10 +279,10 @@ class MavlinkBackend(BaseBackend):
                 f"MAVLink connected: device={self._config.connect_device}, "
                 f"target={self._mavlink_connect.target_system}:{self._mavlink_connect.target_component}"
             )
-            
-            self.fetch_all_parameters()
-            
             self._start_background_workers()
+
+            if not self.wait_ready():
+                raise TimeoutError("MAVLink backend is not ready: timed out waiting for telemetry/parameters.")
 
             self._connected = True            
 
@@ -393,11 +393,87 @@ class MavlinkBackend(BaseBackend):
         # https://mavlink.io/en/mavgen_python/
         while not self._stop_event.is_set():
             try:
-                msg: "MAVLink_message1" = self._mavlink_connect.recv_match()
+                msg: "MAVLink_message1" = self._mavlink_connect.recv_match(
+                    type=self._config.recv_match_type,
+                    condition=self._config.recv_match_condition,
+                    blocking=self._config.recv_match_blocking,
+                    timeout=self._config.recv_match_timeout,
+                )
 
             except Exception as exc:
                 self.log_warning(f"MAVLink reader error: {exc}")
-                self._stop_event.wait(0.0)
+                self._stop_event.wait(0.05)
+
+    def wait_ready(
+        self,
+        timeout: float = 15.0,
+        poll_period_s: float = 0.5,
+    ) -> bool:
+        timeout = max(0.1, float(timeout))
+        poll_period_s = max(0.01, float(poll_period_s))
+
+        self.fetch_all_parameters()
+
+        required_messages = (
+            "HEARTBEAT",
+            "LOCAL_POSITION_NED",
+            "ATTITUDE_QUATERNION",
+            "HIGHRES_IMU",
+        )
+
+        deadline = time.time() + timeout
+
+        while time.time() < deadline and not self._stop_event.is_set():
+            messages: dict = self._mavlink_connect.messages
+            params: Dict[str, float] = self._mavlink_connect.params
+
+            missing_messages = [
+                message_name
+                for message_name in required_messages
+                if messages.get(message_name) is None
+            ]
+
+            param_value_msg = messages.get("PARAM_VALUE")
+            expected_param_count = 0
+            if param_value_msg is not None:
+                try:
+                    expected_param_count = max(0, int(getattr(param_value_msg, "param_count", 0)))
+                except Exception:
+                    expected_param_count = 0
+
+            params_ready = expected_param_count > 0 and len(params) >= expected_param_count
+
+            if not missing_messages and params_ready:
+                self.log_info(
+                    f"MAVLink ready: params={len(params)}/{expected_param_count}, "
+                    f"messages={','.join(required_messages)}"
+                )
+                return True
+
+            self._stop_event.wait(poll_period_s)
+
+        messages = self._mavlink_connect.messages
+        params = self._mavlink_connect.params
+        param_value_msg = messages.get("PARAM_VALUE")
+        expected_param_count = 0
+        if param_value_msg is not None:
+            try:
+                expected_param_count = max(0, int(getattr(param_value_msg, "param_count", 0)))
+            except Exception:
+                expected_param_count = 0
+
+        missing_messages = [
+            message_name
+            for message_name in required_messages
+            if messages.get(message_name) is None
+        ]
+
+        self.log_warning(
+            "MAVLink wait_ready timeout: "
+            f"missing_messages={missing_messages}, "
+            f"params={len(params)}/{expected_param_count}"
+        )
+        return False
     
     def _machine_local_position_update_loop(self) -> None:
         period = max(0.01, float(self._config.local_position_update_period_s))
