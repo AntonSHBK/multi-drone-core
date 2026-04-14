@@ -45,15 +45,15 @@ def main() -> None:
     time.sleep(5)
     
     controller.set_manual_mode()
-    print("Set mode to MANUAL.")
+    print(f"Set mode to {controller.get_mode()}")
     
     time.sleep(5)
     controller.set_stabilized_mode()
-    print("Set mode to STABILIZE.")
+    print(f"Set mode to {controller.get_mode()}")
     
     time.sleep(5)
     controller.set_manual_mode()
-    print("Set mode to MANUAL.")  
+    print(f"Set mode to {controller.get_mode()}")  
     
     print("Parameters:")
     for name, value in controller.get_all_parameters().items():

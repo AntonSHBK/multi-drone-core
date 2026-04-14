@@ -81,7 +81,7 @@ class MavlinkBackendConfig:
 
     # Callback и таймауты
     connect_progress_callback: Callable[..., Any] | None = None
-    connect_udp_timeout: float = 0.0
+    connect_udp_timeout: float = 5.0
 
     # Дополнительные параметры соединения
     connect_opts: dict[str, Any] = field(default_factory=dict)
@@ -265,7 +265,7 @@ class MavlinkBackend(BaseBackend):
                 **self._config.connect_opts,
             )
 
-            heartbeat_timeout = max(1.0, float(self._config.connect_udp_timeout or 3.0))
+            heartbeat_timeout = max(1.0, self._config.connect_udp_timeout)
             heartbeat = self._mavlink_connect.wait_heartbeat(timeout=heartbeat_timeout)
             if heartbeat is None:
                 raise TimeoutError("No heartbeat received from MAVLink target.")
