@@ -396,6 +396,12 @@ class MavlinkBackend(BaseBackend):
         while not self._stop_event.is_set():
             try:
                 msg: "MAVLink_message1" = self._mavlink_connect.recv_match()
+                
+                if msg is None:
+                    continue
+
+                if msg.get_type() == "STATUSTEXT":
+                    print(f"[STATUSTEXT][{msg.severity}] {msg.text}")
 
             except Exception as exc:
                 self.log_warning(f"MAVLink reader error: {exc}")
@@ -613,7 +619,15 @@ class MavlinkBackend(BaseBackend):
         custom_mode = getattr(heartbeat, "custom_mode", 0)
 
         if autopilot == mavutil.mavlink.MAV_AUTOPILOT_PX4:
-            return mavutil.interpret_px4_mode(base_mode, custom_mode)
+            mode = mavutil.interpret_px4_mode(base_mode, custom_mode)
+            if mode != "UNKNOWN":
+                return mode
+
+            custom_main_mode = (custom_mode & 0xFF0000) >> 16
+            if custom_main_mode == 6:
+                return "OFFBOARD"
+
+            return "UNKNOWN"
 
         return mavutil.mode_string_v10(heartbeat)
        
@@ -812,16 +826,39 @@ class MavlinkBackend(BaseBackend):
 
         status: Dict[str, Any] = {}
 
+        system_status_map = {
+            0: "UNINIT",
+            1: "BOOT",
+            2: "CALIBRATING",
+            3: "STANDBY",
+            4: "ACTIVE",
+            5: "CRITICAL",
+            6: "EMERGENCY",
+            7: "POWEROFF",
+        }
+
         if heartbeat is not None:
-            status["mode"] = mavutil.mode_string_v10(heartbeat)
-            status["armed"] = bool(
-                heartbeat.base_mode & mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED
-            )
-            status["system_status"] = heartbeat.system_status
+            base_mode = heartbeat.base_mode
+            custom_mode = heartbeat.custom_mode
+
+            try:
+                mode = mavutil.interpret_px4_mode(base_mode, custom_mode)
+            except Exception:
+                mode = "UNKNOWN"
+
+            armed = bool(base_mode & mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED)
+            system_status = heartbeat.system_status
+
+            status["mode"] = mode
+            status["armed"] = armed
+            status["system_status"] = system_status
+            status["system_status_text"] = system_status_map.get(system_status, "UNKNOWN")
+
         else:
             status["mode"] = "UNKNOWN"
             status["armed"] = False
             status["system_status"] = None
+            status["system_status_text"] = "UNKNOWN"
 
         if sys_status is not None:
             status["battery_voltage"] = sys_status.voltage_battery
@@ -833,6 +870,17 @@ class MavlinkBackend(BaseBackend):
             status["battery_remaining"] = None
             status["load"] = None
             status["sensors_health"] = None
+
+        # --- PRINT ДЛЯ ОТЛАДКИ ---
+        print("\n=== DRONE STATUS ===")
+        print(f"Mode: {status['mode']}  (текущий режим полёта)")
+        print(f"Armed: {status['armed']}  (включены ли моторы)")
+        print(f"System Status: {status['system_status_text']}  (состояние автопилота)")
+        print(f"Battery: {status['battery_voltage']} mV  (напряжение)")
+        print(f"Battery Remaining: {status['battery_remaining']} %")
+        print(f"CPU Load: {status['load']}  (нагрузка автопилота)")
+        print(f"Sensors Health: {status['sensors_health']}  (битовая маска датчиков)")
+        print("====================\n")
 
         return status
     

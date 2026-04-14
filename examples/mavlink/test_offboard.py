@@ -44,6 +44,10 @@ def main() -> None:
         print("M23: switch to OFFBOARD...")
         controller.commander.process_new_command(M23_Offboard(counter=1))
         print(f"Current mode: {controller.get_mode()}")
+        time.sleep(5.0)
+        
+        backend.get_status()
+        backend.get_preflight_parameters()
 
         print("M10: ARM...")
         controller.commander.process_new_command(M10_Arm(counter=1))
