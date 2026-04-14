@@ -40,23 +40,23 @@ def main() -> None:
     controller.start()
     print("Controller started.")
     
-    controller.backend.get_all_parameters()
+    controller.fetch_all_parameters()
     
     time.sleep(5)
     
-    controller.backend._set_mode(MavModes.manual)
+    controller.set_manual_mode()
     print("Set mode to MANUAL.")
     
     time.sleep(5)
-    controller.backend._set_mode(MavModes.stabilized)
+    controller.set_stabilized_mode()
     print("Set mode to STABILIZE.")
     
     time.sleep(5)
-    controller.backend._set_mode(MavModes.manual)
+    controller.set_manual_mode()
     print("Set mode to MANUAL.")  
     
     print("Parameters:")
-    for name, value in controller.machine_system_data.parameters.items():
+    for name, value in controller.get_all_parameters():
         print(f"  {name}: {value}")
         
     controller.stop()

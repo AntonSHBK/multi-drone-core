@@ -938,13 +938,6 @@ class MachineSystemData:
         else:
             return
 
-    def _update_parameter(self, msg: MAVLink_param_value_message) -> None:
-        """
-        Обновление или добавление параметра в словарь.
-        """
-        param = ParamValue.from_message(msg)
-        self.parameters[param.param_id] = param
-
     def get_parameter(self, name: str) -> ParamValue | None:
         return self.parameters.get(name)
 

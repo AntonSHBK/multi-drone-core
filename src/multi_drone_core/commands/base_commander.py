@@ -1,45 +1,66 @@
 from abc import ABC, abstractmethod
 from typing import Type
 from threading import Lock
+from collections import deque
 
-from multi_drone.controllers.base.base_controller import BaseDroneController
-from multi_drone.move_commands.base.base_g_code import BaseGCommand
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from multi_drone_core.controllers.base_controller import BaseController
+    from multi_drone_core.commands.base_command import BaseCommand
 
 
-class DroneCommander(ABC):
+class BaseCommander(ABC):
     """
     Базовый класс для командеров, управляющих командами дрона.
     """
-    def __init__(self, controller: BaseDroneController):
+    def __init__(self, controller: "BaseController"):
         self.controller = controller
+        self.logger = controller.loggers.commander
         self.command_classes = {}
-        self.command_queue = []
+        self.command_queue = deque()
         self.command_history = []
         self.lock = Lock()
-        self.active_command: BaseGCommand = None
+        self.active_command: "BaseCommand" = None
+        
+    @abstractmethod
+    def start(self):
+        pass    
+    
+    @abstractmethod
+    def stop(self):
+        pass
 
     @abstractmethod
-    def process_incoming_command(self, data: dict):
+    def process_new_command(self, data):
         """
         Метод для обработки входящей команды.
-        :param data: Словарь данных команды.
+        :param data: Словарь данных команды или готовый объект команды.
         """
         pass
 
-    def add_command(self, command: BaseGCommand):
+    def add_command(self, command: "BaseCommand"):
         """
         Добавляет команду в очередь.
         :param command: Объект команды.
         """
         with self.lock:
             self.command_queue.append(command)
+        self.log_info(f"Добавлена команда в очередь: {command.name}")
+        
+    def get_command(self):
+        return self.command_queue.popleft()
 
-    @abstractmethod
-    def handle_completion(self, command):
+    def before_command(self, command: "BaseCommand") -> None:
         """
-        Метод вызывается при завершении команды.
+        Хук перед выполнением команды.
         """
-        pass
+        command.before_execute()
+
+    def after_command(self, command: "BaseCommand") -> None:
+        """
+        Хук после выполнения команды.
+        """
+        command.after_execute()
 
     def clear_command_queue(self):
         """
@@ -47,6 +68,7 @@ class DroneCommander(ABC):
         """
         with self.lock:
             self.command_queue.clear()        
+        self.log_info("Очередь команд очищена.")
         
     def add_command_class(self, name: str, class_type: Type[object]) -> None:
         """
@@ -59,3 +81,12 @@ class DroneCommander(ABC):
         if name in self.command_classes:
             raise ValueError(f"Класс с именем '{name}' уже существует в словаре.")
         self.command_classes[name] = class_type
+
+    def log_info(self, message: str) -> None:
+        self.logger.info(message)
+
+    def log_warning(self, message: str) -> None:
+        self.logger.warning(message)
+
+    def log_error(self, message: str) -> None:
+        self.logger.error(message)

@@ -337,7 +337,7 @@ class Ros2Backend(BaseBackend):
     def ping(self):
         pass
     
-    def takeoff(self):
+    def auto_takeoff(self):
         self.publish_vehicle_command(
             VehicleCommand.VEHICLE_CMD_NAV_TAKEOFF, 
             param1=1.0, 
@@ -370,7 +370,7 @@ class Ros2Backend(BaseBackend):
             param1=0.0
         )
 
-    def land(self):
+    def auto_land(self):
         self.publish_vehicle_command(
             VehicleCommand.VEHICLE_CMD_NAV_LAND
         )

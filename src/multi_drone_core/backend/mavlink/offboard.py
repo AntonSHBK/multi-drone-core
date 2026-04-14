@@ -6,11 +6,13 @@ from typing import TYPE_CHECKING
 import numpy as np
 from pymavlink import mavutil
 
+from multi_drone_core.backend.base_offboard_commander import BaseOffboardCommander
+
 if TYPE_CHECKING:
     from multi_drone_core.backend.mavlink.handler import MavlinkBackend
     from multi_drone_core.controllers.position_transformer import CoordinateSystem
 
-class OffboardCommander:
+class OffboardCommander(BaseOffboardCommander):
     def __init__(self, backend: "MavlinkBackend") -> None:
         self._backend = backend
         self._thread: threading.Thread | None = None
@@ -27,7 +29,7 @@ class OffboardCommander:
         rate_hz = max(0.1, float(self._backend._config.offboard_setpoint_rate_hz))
         self.offboard_period = 1.0 / rate_hz
 
-        self.target_orientation_system: "CoordinateSystem" = "local_NED"
+        self.machine_orientation_system: "CoordinateSystem" = "local_NED"
 
     @property
     def is_running(self) -> bool:
@@ -93,7 +95,7 @@ class OffboardCommander:
             position = np.asarray(position, dtype=float)
             target_state.update_position(position, system=system)
             self._position = target_state.get_position(
-                system=self.target_orientation_system
+                system=self.machine_orientation_system
             ).copy()
         else:
             self._position = None
@@ -103,7 +105,7 @@ class OffboardCommander:
             velocity = np.asarray(velocity, dtype=float)
             target_state.update_velocity(velocity, system=system)
             self._velocity = target_state.get_velocity(
-                system=self.target_orientation_system
+                system=self.machine_orientation_system
             ).copy()
         else:
             self._velocity = None
@@ -113,7 +115,7 @@ class OffboardCommander:
             acceleration = np.asarray(acceleration, dtype=float)
             target_state.update_acceleration(acceleration, system=system)
             self._acceleration = target_state.get_acceleration(
-                system=self.target_orientation_system
+                system=self.machine_orientation_system
             ).copy()
         else:
             self._acceleration = None
@@ -126,7 +128,7 @@ class OffboardCommander:
                 system=system,
             )
             self._yaw = float(
-                target_state.get_orientation_euler(system=self.target_orientation_system)[2]
+                target_state.get_orientation_euler(system=self.machine_orientation_system)[2]
             )
         else:
             self._yaw = None
@@ -200,7 +202,6 @@ class OffboardCommander:
         )
 
     def _offboard_loop(self) -> None:
-        
 
         while not self._stop_event.is_set():
             try:
@@ -214,19 +215,19 @@ class OffboardCommander:
         current_state = self._backend.controller.current_state
         target_state = self._backend.controller.target_state
 
-        current_pos_ned = current_state.get_position(system=self.target_orientation_system)
-        current_orient_quat_ned = current_state.get_orientation_quaternion(system=self.target_orientation_system)
+        current_pos_ned = current_state.get_position(system=self.machine_orientation_system)
+        current_orient_quat_ned = current_state.get_orientation_quaternion(system=self.machine_orientation_system)
 
-        target_state.update_position(current_pos_ned, system=self.target_orientation_system)
+        target_state.update_position(current_pos_ned, system=self.machine_orientation_system)
         target_state.reset_velocity()
         target_state.reset_acceleration()
         target_state.update_orientation_quaternion(
             current_orient_quat_ned,
-            system=self.target_orientation_system,
+            system=self.machine_orientation_system,
         )
 
         self._position = current_pos_ned.copy()
         self._velocity = None
         self._acceleration = None
-        self._yaw = float(target_state.get_orientation_euler(system=self.target_orientation_system)[2])
+        self._yaw = float(target_state.get_orientation_euler(system=self.machine_orientation_system)[2])
         self._yaw_speed = None

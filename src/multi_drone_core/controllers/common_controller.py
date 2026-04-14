@@ -18,14 +18,12 @@ class CommonController(BaseController):
         world_position_enu: np.ndarray = np.array([0.0, 0.0, 0.0]),
         world_orientation_rpy: np.ndarray = np.array([0.0, 0.0, 0.0]),
         backend: Optional[BaseBackend] = None,
-        max_command_queue: int = 128,
     ) -> None:
         super().__init__(
             machine_id=machine_id,
             machine_type=machine_type,
             world_position_enu=world_position_enu,
             world_orientation_enu_rpy=world_orientation_rpy,
-            max_command_queue=max_command_queue,
         )
         self._logger = self.loggers.controller
         if backend is not None:
