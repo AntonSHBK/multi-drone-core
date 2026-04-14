@@ -220,7 +220,6 @@ class MavlinkBackend(BaseBackend):
         self._message_buffer: Dict[str, Any] = {}
 
         self._stop_event = threading.Event()
-        self._reader_thread: threading.Thread | None = None
         self._local_position_thread: threading.Thread | None = None
         self._heartbeat_thread: threading.Thread | None = None
         
@@ -364,21 +363,20 @@ class MavlinkBackend(BaseBackend):
             daemon=True,
         )
         
-        self._reader_thread.start()
+        self._heartbeat_thread.start()
         self._local_position_thread.start()
 
     def _stop_background_workers(self) -> None:
         self._stop_event.set()
 
         for thread in (
-            self._reader_thread, 
             self._local_position_thread,
             self._heartbeat_thread,
         ):
             if thread is not None and thread.is_alive():
                 thread.join(timeout=2.0)
 
-        self._reader_thread = None
+        self._heartbeat_thread = None
         self._local_position_thread = None
 
     def _machine_local_position_update_loop(self) -> None:
