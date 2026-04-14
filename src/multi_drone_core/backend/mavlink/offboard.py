@@ -1,7 +1,7 @@
 ﻿from __future__ import annotations
 
 import threading
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 from pymavlink import mavutil
@@ -25,6 +25,7 @@ class OffboardCommander(BaseOffboardCommander):
         self._acceleration: np.ndarray | None = None
         self._yaw: float | None = None
         self._yaw_speed: float | None = None
+        self.mode: Literal["local", "global", "attitude"] = "attitude"
         
         rate_hz = max(0.1, float(self._backend._config.offboard_setpoint_rate_hz))
         self.offboard_period = 1.0 / rate_hz
@@ -76,6 +77,7 @@ class OffboardCommander(BaseOffboardCommander):
         acceleration: np.ndarray | None = None,
         yaw: float | None = None,
         yaw_speed: float | None = None,
+        mode: Literal["local", "global", "attitude"] | None = None,
         system: "CoordinateSystem" = "global_ENU",
     ):
         """
@@ -139,10 +141,27 @@ class OffboardCommander(BaseOffboardCommander):
             self._yaw_speed = -yaw_speed_value if system.endswith("ENU") else yaw_speed_value
         else:
             self._yaw_speed = None
+
+        if mode is not None:
+            if mode not in ("local", "global", "attitude"):
+                raise ValueError("Offboard mode must be one of: local, global, attitude")
+            self.mode = mode
         
     def offboard_send_msg(self) -> None:
         if not self._backend.is_connected:
             return
+        
+        if self.mode == "local":
+            self._send_position_target_local_ned()
+        elif self.mode == "global":
+            self._send_position_target_global_int_stub()
+        elif self.mode == "attitude":
+            self._send_attitude_target_stub()
+        else:
+            self._backend.log_warning(f"Unknown offboard mode '{self.mode}', fallback to local.")
+            self._send_position_target_local_ned()
+
+    def _send_position_target_local_ned(self) -> None:
 
         position = np.zeros(3, dtype=float) if self._position is None else self._position
         velocity = np.zeros(3, dtype=float) if self._velocity is None else self._velocity
@@ -199,6 +218,63 @@ class OffboardCommander(BaseOffboardCommander):
             afz=float(acceleration[2]),
             yaw=yaw,
             yaw_rate=yaw_rate,
+        )
+
+    def _send_position_target_global_int_stub(self) -> None:
+        # Заглушка: игнорируем все поля до уточнения финальной схемы отправки.
+        type_mask = (
+            mavutil.mavlink.POSITION_TARGET_TYPEMASK_X_IGNORE
+            | mavutil.mavlink.POSITION_TARGET_TYPEMASK_Y_IGNORE
+            | mavutil.mavlink.POSITION_TARGET_TYPEMASK_Z_IGNORE
+            | mavutil.mavlink.POSITION_TARGET_TYPEMASK_VX_IGNORE
+            | mavutil.mavlink.POSITION_TARGET_TYPEMASK_VY_IGNORE
+            | mavutil.mavlink.POSITION_TARGET_TYPEMASK_VZ_IGNORE
+            | mavutil.mavlink.POSITION_TARGET_TYPEMASK_AX_IGNORE
+            | mavutil.mavlink.POSITION_TARGET_TYPEMASK_AY_IGNORE
+            | mavutil.mavlink.POSITION_TARGET_TYPEMASK_AZ_IGNORE
+            | mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_IGNORE
+            | mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_RATE_IGNORE
+        )
+
+        self._backend._mavlink.set_position_target_global_int_send(
+            time_boot_ms=0,
+            target_system=int(self._backend._target_system),
+            target_component=int(self._backend._target_component),
+            coordinate_frame=mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT,
+            type_mask=int(type_mask),
+            lat_int=0,
+            lon_int=0,
+            alt=0.0,
+            vx=0.0,
+            vy=0.0,
+            vz=0.0,
+            afx=0.0,
+            afy=0.0,
+            afz=0.0,
+            yaw=0.0,
+            yaw_rate=0.0,
+        )
+
+    def _send_attitude_target_stub(self) -> None:
+        # Заглушка: игнорируем все поля до уточнения финальной схемы отправки.
+        type_mask = (
+            getattr(mavutil.mavlink, "ATTITUDE_TARGET_TYPEMASK_BODY_ROLL_RATE_IGNORE", 0)
+            | getattr(mavutil.mavlink, "ATTITUDE_TARGET_TYPEMASK_BODY_PITCH_RATE_IGNORE", 0)
+            | getattr(mavutil.mavlink, "ATTITUDE_TARGET_TYPEMASK_BODY_YAW_RATE_IGNORE", 0)
+            | getattr(mavutil.mavlink, "ATTITUDE_TARGET_TYPEMASK_THRUST_IGNORE", 0)
+            | getattr(mavutil.mavlink, "ATTITUDE_TARGET_TYPEMASK_ATTITUDE_IGNORE", 0)
+        )
+
+        self._backend._mavlink.set_attitude_target_send(
+            time_boot_ms=0,
+            target_system=int(self._backend._target_system),
+            target_component=int(self._backend._target_component),
+            type_mask=int(type_mask),
+            q=[1.0, 0.0, 0.0, 0.0],
+            body_roll_rate=0.0,
+            body_pitch_rate=0.0,
+            body_yaw_rate=0.0,
+            thrust=0.0,
         )
 
     def _offboard_loop(self) -> None:
