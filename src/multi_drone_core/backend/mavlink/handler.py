@@ -416,6 +416,7 @@ class MavlinkBackend(BaseBackend):
         poll_period_s = max(0.01, float(poll_period_s))
 
         self.fetch_all_parameters()
+        self.send_stub_home_position()
 
         required_messages = (
             "HEARTBEAT",
@@ -535,6 +536,8 @@ class MavlinkBackend(BaseBackend):
                             system="local_NED",
                         )
 
+                self.send_stub_vision_position_estimate()
+            
             except Exception as exc:
                 self.log_warning(f"MAVLink local update error: {exc}")
 
@@ -924,5 +927,119 @@ class MavlinkBackend(BaseBackend):
             return None
 
         return msg.text
+    
+    def send_stub_vision_position_estimate(self) -> None:
+        """
+        Заглушка для отправки локальной позиции от внешнего источника.
+        Пока отправляет нули:
+        x=0, y=0, z=0, roll=0, pitch=0, yaw=0
+        """
+        usec = int(time.time() * 1_000_000)
+
+        x = 0.0
+        y = 0.0
+        z = 0.0
+
+        roll = 0.0
+        pitch = 0.0
+        yaw = 0.0
+
+        self._mavlink.vision_position_estimate_send(
+            usec=usec,
+            x=x,
+            y=y,
+            z=z,
+            roll=roll,
+            pitch=pitch,
+            yaw=yaw,
+        )
+
+    def send_stub_optical_flow_rad(self) -> None:
+        """
+        Заглушка для отправки optical flow.
+        Пока отправляет нули и фиксированное качество.
+        """
+        time_usec = int(time.time() * 1_000_000)
+
+        sensor_id = 0
+        integration_time_us = 10_000
+
+        integrated_x = 0.0
+        integrated_y = 0.0
+
+        integrated_xgyro = 0.0
+        integrated_ygyro = 0.0
+        integrated_zgyro = 0.0
+
+        temperature = 0
+        quality = 255
+
+        time_delta_distance_us = 10_000
+        distance = 0.0
+
+        self._mavlink.optical_flow_rad_send(
+            time_usec=time_usec,
+            sensor_id=sensor_id,
+            integration_time_us=integration_time_us,
+            integrated_x=integrated_x,
+            integrated_y=integrated_y,
+            integrated_xgyro=integrated_xgyro,
+            integrated_ygyro=integrated_ygyro,
+            integrated_zgyro=integrated_zgyro,
+            temperature=temperature,
+            quality=quality,
+            time_delta_distance_us=time_delta_distance_us,
+            distance=distance,
+        )
+        
+    def send_stub_gps_global_origin(self) -> None:
+        """
+        Белгород (пример координат)
+        """
+
+        latitude = 505954000    # 50.5954 * 1e7
+        longitude = 365872000   # 36.5872 * 1e7
+        altitude = 200000       # ~200 м (в мм)
+        
+
+        self._mavlink.gps_global_origin_send(
+            latitude=latitude,
+            longitude=longitude,
+            altitude=altitude,
+        )
+        
+    def send_stub_home_position(self) -> None:
+        """
+        Заглушка для установки home-позиции.
+        Все значения = 0.
+        """
+
+        latitude = 505954000    # 50.5954 * 1e7
+        longitude = 365872000   # 36.5872 * 1e7
+        altitude = 200000       # ~200 м (в мм)
+        
+        x = 0.0
+        y = 0.0
+        z = 0.0
+
+        # Кватернион (w, x, y, z)
+        q = [1.0, 0.0, 0.0, 0.0]
+
+        approach_x = 0.0
+        approach_y = 0.0
+        approach_z = 0.0
+
+        self._mavlink.home_position_send(
+            latitude=latitude,
+            longitude=longitude,
+            altitude=altitude,
+            x=x,
+            y=y,
+            z=z,
+            q=q,
+            approach_x=approach_x,
+            approach_y=approach_y,
+            approach_z=approach_z,
+        )
         
     
