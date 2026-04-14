@@ -393,12 +393,7 @@ class MavlinkBackend(BaseBackend):
         # https://mavlink.io/en/mavgen_python/
         while not self._stop_event.is_set():
             try:
-                msg: "MAVLink_message1" = self._mavlink_connect.recv_match(
-                    type=self._config.recv_match_type,
-                    condition=self._config.recv_match_condition,
-                    blocking=self._config.recv_match_blocking,
-                    timeout=self._config.recv_match_timeout,
-                )
+                msg: "MAVLink_message1" = self._mavlink_connect.recv_match()
 
             except Exception as exc:
                 self.log_warning(f"MAVLink reader error: {exc}")
