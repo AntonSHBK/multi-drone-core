@@ -116,7 +116,7 @@ class MavlinkBackendConfig:
     heartbeat_autopilot: int = mavutil.mavlink.MAV_AUTOPILOT_INVALID
 
     # Offboard setpoint send frequency (Hz), 5.0
-    offboard_setpoint_rate_hz: float = 10.0
+    offboard_setpoint_rate_hz: float = 20.0
     
     wait_ready_timeout: float = 20
 
@@ -225,6 +225,7 @@ class MavlinkBackend(BaseBackend):
         self._reader_thread: threading.Thread | None = None
         self._local_position_thread: threading.Thread | None = None
         self._heartbeat_thread: threading.Thread | None = None
+        self._test_thread: threading.Thread | None = None
         
         self.offboard_commander = OffboardCommander(self)
 
@@ -371,10 +372,16 @@ class MavlinkBackend(BaseBackend):
             name="mavlink-heartbeat-thread",
             daemon=True,
         )
+        self._test_thread = threading.Thread(
+            target=self._test_loop,
+            name="mavlink-test-thread",
+            daemon=True,
+        )
         
         self._reader_thread.start()
         self._heartbeat_thread.start()
         self._local_position_thread.start()
+        self._test_thread.start()
 
     def _stop_background_workers(self) -> None:
         self._stop_event.set()
@@ -383,6 +390,7 @@ class MavlinkBackend(BaseBackend):
             self._reader_thread,
             self._local_position_thread,
             self._heartbeat_thread,
+            self._test_thread,
         ):
             if thread is not None and thread.is_alive():
                 thread.join(timeout=2.0)
@@ -390,6 +398,7 @@ class MavlinkBackend(BaseBackend):
         self._reader_thread = None
         self._heartbeat_thread = None
         self._local_position_thread = None
+        self._test_thread = None
 
     def _read_messages_loop(self) -> None:
         # https://mavlink.io/en/mavgen_python/
@@ -536,8 +545,6 @@ class MavlinkBackend(BaseBackend):
                             system="local_NED",
                         )
 
-                self.send_stub_vision_position_estimate()
-            
             except Exception as exc:
                 self.log_warning(f"MAVLink local update error: {exc}")
 
@@ -552,6 +559,17 @@ class MavlinkBackend(BaseBackend):
                 self._heartbeat_send()
             except Exception as exc:
                 self.log_warning(f"MAVLink heartbeat error: {exc}")
+
+            self._stop_event.wait(period)
+    
+    def _test_loop(self) -> None:
+        period = 0.1  # 10 Hz
+
+        while not self._stop_event.is_set():
+            try:
+                self.send_stub_vision_position_estimate()
+            except Exception as exc:
+                self.log_warning(f"MAVLink test thread error: {exc}")
 
             self._stop_event.wait(period)
     
@@ -1043,3 +1061,102 @@ class MavlinkBackend(BaseBackend):
         )
         
     
+    def send_fake_gps(
+        self,
+        lat_deg: float = 55.7558000,
+        lon_deg: float = 37.6173000,
+        alt_m: float = 200.0,
+        vn_m_s: float = 0.0,
+        ve_m_s: float = 0.0,
+        vd_m_s: float = 0.0,
+        satellites_visible: int = 12,
+        eph: float = 0.8,
+        epv: float = 1.5,
+        fix_type: int = 3,
+        gps_id: int = 0,
+        yaw_deg: float | None = None,
+    ) -> None:
+        """
+        Отправка псевдо-GPS в PX4 через HIL_GPS.
+
+        Параметры:
+        - lat_deg, lon_deg: широта/долгота в градусах
+        - alt_m: высота MSL в метрах
+        - vn_m_s, ve_m_s, vd_m_s: скорости в NED, м/с
+        - satellites_visible: число спутников
+        - eph, epv: горизонтальная/вертикальная ошибка, метры
+        - fix_type: 3 = 3D fix
+        - gps_id: id GPS
+        - yaw_deg: курс/heading в градусах, если хотите передавать yaw.
+                   Если None, yaw не передаётся.
+        """
+        time_usec = int(time.time() * 1_000_000)
+
+        lat_e7 = int(lat_deg * 1e7)
+        lon_e7 = int(lon_deg * 1e7)
+        alt_mm = int(alt_m * 1000.0)
+
+        # MAVLink HIL_GPS ждёт eph/epv в unitless*100
+        # Для заглушки переводим условно из "метровой ошибки" в число,
+        # чтобы потом вы заменили на реальные данные.
+        eph_cm = max(0, min(65535, int(eph * 100)))
+        epv_cm = max(0, min(65535, int(epv * 100)))
+
+        speed_m_s = math.sqrt(vn_m_s**2 + ve_m_s**2 + vd_m_s**2)
+        vel_cm_s = max(0, min(65535, int(speed_m_s * 100)))
+
+        vn_cm_s = int(vn_m_s * 100)
+        ve_cm_s = int(ve_m_s * 100)
+        vd_cm_s = int(vd_m_s * 100)
+
+        # course over ground
+        if abs(vn_m_s) < 1e-6 and abs(ve_m_s) < 1e-6:
+            cog_cdeg = 0
+        else:
+            cog_deg = (math.degrees(math.atan2(ve_m_s, vn_m_s)) + 360.0) % 360.0
+            cog_cdeg = int(cog_deg * 100)
+
+        # yaw в cdeg: 0 = не доступен, 36000 = north
+        if yaw_deg is None:
+            yaw_cdeg = 0
+        else:
+            yaw_norm = yaw_deg % 360.0
+            yaw_cdeg = 36000 if abs(yaw_norm) < 1e-6 else int(yaw_norm * 100)
+
+        self.mav.hil_gps_send(
+            time_usec,           # uint64_t
+            fix_type,            # uint8_t
+            lat_e7,              # int32_t
+            lon_e7,              # int32_t
+            alt_mm,              # int32_t, mm
+            eph_cm,              # uint16_t
+            epv_cm,              # uint16_t
+            vel_cm_s,            # uint16_t
+            vn_cm_s,             # int16_t
+            ve_cm_s,             # int16_t
+            vd_cm_s,             # int16_t
+            cog_cdeg,            # uint16_t
+            satellites_visible,  # uint8_t
+            gps_id,              # uint8_t
+            yaw_cdeg,            # uint16_t
+        )
+        
+    
+# MAV_USEHILGPS = 1
+# SYS_HAS_GPS   = 1
+# EKF2_GPS_CTRL = 5
+# EKF2_BARO_CTRL = 1
+# EKF2_HGT_REF   = 0
+
+# MAV_USEHILGPS=1 — PX4 начинает парсить входящие HIL_GPS даже не в HIL-режиме.
+# SYS_HAS_GPS=1 — система считает, что GPS есть; если поставить 0, sensor_gps вообще не будет обрабатываться.
+# EKF2_GPS_CTRL=5 — это биты Lon/Lat + 3D velocity, без fusion GPS altitude. В документации бит 0 — Lon/lat, бит 1 — Altitude, бит 2 — 3D velocity, поэтому 5 = 1 + 4.
+# EKF2_BARO_CTRL=1 — высота от барометра включена.
+# EKF2_HGT_REF=0 — барометр становится reference source для высоты.
+
+# Если ваши псевдо-GPS данные “идеальные” или нестандартные, EKF может не принять их из-за GPS health checks. Эти проверки задаются EKF2_GPS_CHECK, а пороги — параметрами EKF2_REQ_*; дополнительно время непрерывно “здорового” GPS задаётся EKF2_REQ_GPS_H.
+
+# Для стенда и первых тестов обычно достаточно ослабить проверки так:
+
+# EKF2_REQ_GPS_H = 0.1
+# EKF2_GPS_CHECK = 0

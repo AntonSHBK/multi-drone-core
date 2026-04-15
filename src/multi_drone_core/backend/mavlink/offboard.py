@@ -25,7 +25,7 @@ class OffboardCommander(BaseOffboardCommander):
         self._acceleration: np.ndarray | None = None
         self._yaw: float | None = None
         self._yaw_speed: float | None = None
-        self.mode: Literal["local", "global", "attitude"] = "attitude"
+        self.mode: Literal["local", "global", "attitude"] = "local"
         
         rate_hz = max(0.1, float(self._backend._config.offboard_setpoint_rate_hz))
         self.offboard_period = 1.0 / rate_hz
