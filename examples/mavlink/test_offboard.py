@@ -16,7 +16,13 @@ def _bootstrap_local_path() -> None:
 _bootstrap_local_path()
 
 from multi_drone_core.backend.mavlink.handler import MavlinkBackend, MavlinkBackendConfig
-from multi_drone_core.commands.m_command import M10_Arm, M11_Disarm, M23_Offboard, M24_HoldLoiter
+from multi_drone_core.commands.m_command import (
+    M10_Arm, 
+    M11_Disarm, 
+    M23_Offboard,
+    M20_Manual, 
+    M24_HoldLoiter
+)
 from multi_drone_core.controllers.common_controller import CommonController
 
 
@@ -41,8 +47,8 @@ def main() -> None:
     print("Controller started.")
 
     try:
-        print("M23: switch to OFFBOARD...")
-        controller.commander.process_new_command(M23_Offboard(counter=1))
+        print("M23: switch to Manual...")
+        controller.commander.process_new_command(M20_Manual(counter=1))
         print(f"Current mode: {controller.get_mode()}")
         time.sleep(5.0)
         

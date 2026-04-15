@@ -116,7 +116,7 @@ class MavlinkBackendConfig:
     heartbeat_autopilot: int = mavutil.mavlink.MAV_AUTOPILOT_INVALID
 
     # Offboard setpoint send frequency (Hz), 5.0
-    offboard_setpoint_rate_hz: float = 20.0
+    offboard_setpoint_rate_hz: float = 10.0
     
     wait_ready_timeout: float = 20
 
@@ -1123,7 +1123,7 @@ class MavlinkBackend(BaseBackend):
             yaw_norm = yaw_deg % 360.0
             yaw_cdeg = 36000 if abs(yaw_norm) < 1e-6 else int(yaw_norm * 100)
 
-        self.mav.hil_gps_send(
+        self._mavlink.hil_gps_send(
             time_usec,           # uint64_t
             fix_type,            # uint8_t
             lat_e7,              # int32_t
