@@ -664,11 +664,13 @@ class MavlinkBackend(BaseBackend):
     
     def arm(self) -> None:
         self._mavlink_connect.arducopter_arm()
-        self._mavlink_connect.motors_armed_wait()
+        if not self._wait_armed_state(target_armed=True, timeout=5.0):
+            raise TimeoutError("Timeout while waiting for vehicle to arm.")
 
     def disarm(self) -> None:        
         self._mavlink_connect.arducopter_disarm()
-        self._mavlink_connect.motors_disarmed_wait()
+        if not self._wait_armed_state(target_armed=False, timeout=5.0):
+            raise TimeoutError("Timeout while waiting for vehicle to disarm.")
 
     def set_offboard_mode(self) -> None:
         self.set_mode(MavModes.offboard)
@@ -719,6 +721,25 @@ class MavlinkBackend(BaseBackend):
                 return True
             time.sleep(0.05)
             
+        return False
+
+    def _wait_armed_state(self, target_armed: bool, timeout: float = 5.0) -> bool:
+        start = time.time()
+        armed_flag = mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED
+
+        while time.time() - start < timeout:
+            heartbeat = self._mavlink_connect.messages.get("HEARTBEAT")
+            if heartbeat is None:
+                time.sleep(0.05)
+                continue
+
+            base_mode = int(getattr(heartbeat, "base_mode", 0))
+            is_armed = bool(base_mode & armed_flag)
+            if is_armed == target_armed:
+                return True
+
+            time.sleep(0.05)
+
         return False
 
     def auto_land(self) -> None:
