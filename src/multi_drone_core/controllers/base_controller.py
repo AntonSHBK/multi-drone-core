@@ -195,9 +195,13 @@ class BaseController(ABC):
 
     def offboard_stop(self) -> None:
         self.backend.offboard_stop()
+        pass
 
     def check_offboard_mode(self) -> bool:
         return self.backend.check_offboard_mode()
+    
+    def check_armed(self) -> bool:
+        return self.backend.check_armed()
 
     def arm(self) -> None:
         self.backend.arm()

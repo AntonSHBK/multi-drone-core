@@ -14,21 +14,19 @@ class M12_Takeoff(BaseCommand):
     """
 
     def __init__(self, counter: int = 0, takeoff_altitude: float = 3.0):
-        super().__init__(name="M12", counter=counter, is_special_command=True)
+        super().__init__(name="M12", counter=counter)
         self.takeoff_altitude = float(takeoff_altitude)
         self.description = "Takeoff"
+        self.ready()
 
     def can_execute(self, controller: "BaseController") -> bool:
         return True
 
     def execute(self, controller: "BaseController") -> None:
         controller.auto_takeoff(altitude=self.takeoff_altitude)
-        controller.log_info(
-            f"M12_Takeoff: отправлена команда взлёта на высоту {self.takeoff_altitude:.2f} м."
-        )
-        self.complete_command()
 
     def is_complete(self, controller: "BaseController") -> bool:
+        # TODO: Добавить логику остановки
         return self._check_finish()
 
     def to_dict(self) -> dict:

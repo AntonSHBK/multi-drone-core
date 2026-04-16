@@ -1,4 +1,4 @@
-from abc import ABC, abstractmethod
+﻿from abc import ABC, abstractmethod
 from typing import Type
 from threading import Lock
 from collections import deque
@@ -21,6 +21,7 @@ class BaseCommander(ABC):
         self.command_history = []
         self.lock = Lock()
         self.active_command: "BaseCommand" = None
+        self._execution_paused = False
         
     @abstractmethod
     def start(self):
@@ -37,6 +38,35 @@ class BaseCommander(ABC):
         :param data: Словарь данных команды или готовый объект команды.
         """
         pass
+
+    def stop_command_execution(self) -> None:
+        """
+        Full stop of command execution pipeline.
+        """
+        self._execution_paused = True
+        self.clear_commands()
+        try:
+            self.controller.send_offboard_setpoint(velocity=[0.0, 0.0, 0.0])
+        except Exception as exc:
+            self.log_warning(f"Failed to send hold setpoint on stop: {exc}")
+
+    def pause_command_execution(self) -> None:
+        """
+        Pause current command execution.
+        """
+        self._execution_paused = True
+        try:
+            self.controller.send_offboard_setpoint(velocity=[0.0, 0.0, 0.0])
+        except Exception as exc:
+            self.log_warning(f"Failed to send hold setpoint on pause: {exc}")
+        self.log_info("Command execution paused.")
+
+    def resume_command_execution(self) -> None:
+        """
+        Resume command execution after pause.
+        """
+        self._execution_paused = False
+        self.log_info("Command execution resumed.")
 
     def add_command(self, command: "BaseCommand"):
         """
@@ -69,6 +99,27 @@ class BaseCommander(ABC):
         with self.lock:
             self.command_queue.clear()        
         self.log_info("Очередь команд очищена.")
+        
+    def clear_command_history(self):
+        """
+        Метод очистки команд из истории.
+        """
+        self.command_history.clear()        
+        self.log_info("История команд очищена.")
+
+    def clear_commands(self) -> None:
+        """
+        Полная очистка: сбрасывает активную команду и очередь.
+        """
+        with self.lock:
+            if self.active_command is not None:
+                try:
+                    self.active_command.interrupt()
+                except Exception:
+                    pass
+                self.active_command = None
+            self.clear_command_queue()
+        self.log_info("Активная команда и очередь очищены.")
         
     def add_command_class(self, name: str, class_type: Type[object]) -> None:
         """

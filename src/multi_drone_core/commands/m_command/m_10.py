@@ -14,17 +14,19 @@ class M10_Arm(BaseCommand):
     """
 
     def __init__(self, counter: int = 0):
-        super().__init__(name="M10", counter=counter, is_special_command=True)
+        super().__init__(name="M10", counter=counter)
         self.description = "Arm drone"
+        self.ready()
 
     def can_execute(self, controller: "BaseController") -> bool:
         return True
 
     def execute(self, controller: "BaseController") -> None:
         controller.arm()
-        self.complete_command()
 
     def is_complete(self, controller: "BaseController") -> bool:
+        if controller.check_armed():
+            self.complete_command()
         return self._check_finish()
 
     def to_dict(self) -> dict:

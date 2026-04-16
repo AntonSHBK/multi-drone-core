@@ -240,7 +240,13 @@ class BaseBackend(ABC):
         """
         Check if vehicle is currently in OFFBOARD mode.
         """
-        
+
+    @abstractmethod
+    def check_armed(self) -> bool:
+        """
+        Check if vehicle is currently armed.
+        """
+
     @abstractmethod
     def reboot(self) -> None:
         """

@@ -657,10 +657,6 @@ class MavlinkBackend(BaseBackend):
     
     def offboard_stop(self):
         self.offboard_commander.stop()
-        
-    def check_offboard_mode(self) -> bool:
-        mode = self.get_mode()
-        return mode == MavModes.offboard.value
     
     def arm(self) -> None:
         self._mavlink_connect.arducopter_arm()
@@ -671,6 +667,19 @@ class MavlinkBackend(BaseBackend):
         self._mavlink_connect.arducopter_disarm()
         if not self._wait_armed_state(target_armed=False, timeout=5.0):
             raise TimeoutError("Timeout while waiting for vehicle to disarm.")
+
+    def check_offboard_mode(self) -> bool:
+        mode = self.get_mode()
+        return mode == MavModes.offboard.value
+
+    def check_armed(self) -> bool:
+        heartbeat = self._mavlink_connect.messages.get("HEARTBEAT")
+        if heartbeat is None:
+            return False
+
+        armed_flag = mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED
+        base_mode = int(getattr(heartbeat, "base_mode", 0))
+        return bool(base_mode & armed_flag)
 
     def set_offboard_mode(self) -> None:
         self.set_mode(MavModes.offboard)
@@ -725,16 +734,9 @@ class MavlinkBackend(BaseBackend):
 
     def _wait_armed_state(self, target_armed: bool, timeout: float = 5.0) -> bool:
         start = time.time()
-        armed_flag = mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED
 
         while time.time() - start < timeout:
-            heartbeat = self._mavlink_connect.messages.get("HEARTBEAT")
-            if heartbeat is None:
-                time.sleep(0.05)
-                continue
-
-            base_mode = int(getattr(heartbeat, "base_mode", 0))
-            is_armed = bool(base_mode & armed_flag)
+            is_armed = self.check_armed()
             if is_armed == target_armed:
                 return True
 

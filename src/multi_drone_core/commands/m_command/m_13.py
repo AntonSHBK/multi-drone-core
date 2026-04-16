@@ -14,22 +14,19 @@ class M13_Land(BaseCommand):
     """
 
     def __init__(self, counter: int = 0):
-        super().__init__(name="M13", counter=counter, is_special_command=True)
+        super().__init__(name="M13", counter=counter)
         self.description = "Land"
+        self.ready()
 
     def can_execute(self, controller: "BaseController") -> bool:
         return True
 
     def execute(self, controller: "BaseController") -> None:
         controller.auto_land()
-        controller.log_info("M13_Land: отправлена команда посадки.")
-        self.complete_command()
 
     def is_complete(self, controller: "BaseController") -> bool:
+        # TODO: Добавить логику остановки
         return self._check_finish()
-
-    def to_dict(self) -> dict:
-        return super().to_dict()
 
     @classmethod
     def from_dict(cls, data: dict) -> "M13_Land":

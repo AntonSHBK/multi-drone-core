@@ -14,8 +14,9 @@ class M23_Offboard(BaseCommand):
     """
 
     def __init__(self, counter: int = 0):
-        super().__init__(name="M23", counter=counter, is_special_command=True)
+        super().__init__(name="M23", counter=counter)
         self.description = "Switch to OFFBOARD mode"
+        self.ready()
 
     def can_execute(self, controller: "BaseController") -> bool:
         return True
@@ -23,15 +24,10 @@ class M23_Offboard(BaseCommand):
     def execute(self, controller: "BaseController") -> None:
         controller.offboard_start()
         controller.set_offboard_mode()
-        controller.log_info("M23_Offboard: выполнено переключение в режим OFFBOARD.")
-        self.complete_command()
 
     def is_complete(self, controller: "BaseController") -> bool:
         return self._check_finish()
-
-    def to_dict(self) -> dict:
-        return super().to_dict()
-
+    
     @classmethod
     def from_dict(cls, data: dict) -> "M23_Offboard":
         return cls(counter=data.get("counter", 0))

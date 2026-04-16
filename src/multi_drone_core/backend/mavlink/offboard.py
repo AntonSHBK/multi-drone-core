@@ -53,10 +53,6 @@ class OffboardCommander(BaseOffboardCommander):
             self._running = True
             self._thread.start()
 
-        # Switch mode after stream startup so setpoints are already flowing.
-        # self._backend._set_mode("OFFBOARD")
-        # self._backend.log_info("Offboard commander started")
-
     def stop(self) -> None:
         if not self._running:
             return

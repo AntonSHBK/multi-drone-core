@@ -110,11 +110,15 @@ class CommonCommander(BaseCommander):
         """
         Выполняет обработку очереди команд.
         """
+        if self._execution_paused:
+            return
+
         if self.active_command:
             try:
                 if not self.active_command.is_complete(self.controller):
                     self.active_command.safe_execute(self.controller)
-                    return
+                    if not self.active_command.is_complete(self.controller):
+                        return
                 self.after_command(self.active_command)
                 self.active_command = None
             except Exception as e:
@@ -151,6 +155,12 @@ class CommonCommander(BaseCommander):
                 return
 
             command = command_class.from_dict(data)
+            
+            if not command.is_ready:
+                raise RuntimeError(
+                    f"Команда {command_name} не готова к выполнению: is_ready=False."
+                )
+            
             self.command_history.append(data)
         else:
             self.log_error(
@@ -178,3 +188,4 @@ class CommonCommander(BaseCommander):
         self.before_command(command)
         command.safe_execute(self.controller)
         self.after_command(command)
+        

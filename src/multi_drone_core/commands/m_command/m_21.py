@@ -14,18 +14,18 @@ class M21_AltCtl(BaseCommand):
     """
 
     def __init__(self, counter: int = 0):
-        super().__init__(name="M21", counter=counter, is_special_command=True)
+        super().__init__(name="M21", counter=counter)
         self.description = "Switch to ALTCTL mode"
+        self.ready()
 
     def can_execute(self, controller: "BaseController") -> bool:
         return True
 
     def execute(self, controller: "BaseController") -> None:
         controller.set_altctl_mode()
-        controller.log_info("M21_AltCtl: выполнено переключение в режим ALTCTL.")
-        self.complete_command()
-
+        
     def is_complete(self, controller: "BaseController") -> bool:
+        # TODO: Добавить логику остановки
         return self._check_finish()
 
     def to_dict(self) -> dict:

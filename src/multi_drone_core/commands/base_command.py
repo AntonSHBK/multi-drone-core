@@ -15,6 +15,7 @@ class BaseCommand(ABC):
         self.current_step = current_step
         self.is_special_command = is_special_command
         self.description: str = "Base class"
+        self.is_ready = False
 
     def get_description(self):
         return self.description
@@ -68,6 +69,9 @@ class BaseCommand(ABC):
         
     def _check_interrupt(self):
         return True if self.interrupt else False
+    
+    def ready(self):
+        self.is_ready = True
     
     def mark_as_interrupted(self):
         """

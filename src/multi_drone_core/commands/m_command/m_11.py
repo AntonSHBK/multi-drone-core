@@ -14,17 +14,19 @@ class M11_Disarm(BaseCommand):
     """
 
     def __init__(self, counter: int = 0):
-        super().__init__(name="M11", counter=counter, is_special_command=True)
+        super().__init__(name="M11", counter=counter)
         self.description = "Disarm drone"
+        self.ready()
 
     def can_execute(self, controller: "BaseController") -> bool:
         return True
 
     def execute(self, controller: "BaseController") -> None:
         controller.disarm()
-        self.complete_command()
 
     def is_complete(self, controller: "BaseController") -> bool:
+        if not controller.check_armed():
+            self.complete_command()
         return self._check_finish()
 
     def to_dict(self) -> dict:
