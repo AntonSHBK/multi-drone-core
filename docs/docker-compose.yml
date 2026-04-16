@@ -1,0 +1,22 @@
+﻿name: multi-drone-core
+
+services:
+  ros-humble-core:
+    container_name: multi-drone-core-dev
+    build:
+      context: ..
+      dockerfile: docs/Dockerfile
+    volumes:
+      - ../:/workspace/src/multi-drone-core
+    env_file:
+      - ./.env
+    ports:
+      - "14540:14540/udp"  # PX4 MAVLink UDP
+      - "8888:8888/udp"    # Micro XRCE-DDS Agent
+    networks:
+      - robot_network
+    tty: true
+
+networks:
+  robot_network:
+    driver: bridge
