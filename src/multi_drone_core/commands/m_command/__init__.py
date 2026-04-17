@@ -21,9 +21,6 @@ from .m_21 import M21_AltCtl
 from .m_22 import M22_Position
 from .m_23 import M23_Offboard
 from .m_24 import M24_HoldLoiter
-from .m_40 import M40_Failsafe
-from .m_41 import M41_EmergencyLand
-from .m_42 import M42_KillMotors
 
 __all__ = [
     "M00_Stop",
