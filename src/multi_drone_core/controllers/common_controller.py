@@ -27,13 +27,6 @@ class CommonController(BaseController):
         )
         self._logger = self.loggers.controller
         if backend is not None:
-            self.set_backend(backend)      
-        
+            self.set_backend(backend)  
 
-        self._logger.info("CommonController initialized")
-
-
-if __name__ == "__main__":
-    # Пример создания контроллера и backend
-    controller = CommonController(machine_id=1)
-    
+        self._logger.info("Контроллер инициализирован")

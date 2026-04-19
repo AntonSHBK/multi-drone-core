@@ -86,20 +86,6 @@ class MavlinkBackendConfig:
     # Дополнительные параметры соединения
     connect_opts: dict[str, Any] = field(default_factory=dict)
     
-    # # --- Параметры recv_match ---
-
-    # # Фильтр по типам MAVLink сообщений (например: "HEARTBEAT" или ["ATTITUDE", "LOCAL_POSITION_NED"])
-    # recv_match_type: str | Iterable[str] | None = None
-
-    # # Условие фильтрации (строка, вычисляемая относительно self.messages)
-    # recv_match_condition: str | None = None
-
-    # # Блокирующий режим ожидания сообщения
-    # recv_match_blocking: bool = False
-
-    # # Таймаут ожидания сообщения (в секундах)
-    # recv_match_timeout: float | None = None
-    
     # --- Параметры локального обновления состояния ---
     
     # Частота обновления локального состояния машины (сек)
