@@ -2,13 +2,14 @@ FROM ubuntu:22.04
 
 # **************************************************************************** #
 
-# nvidia-container-runtime
-ENV NVIDIA_VISIBLE_DEVICES \
-    ${NVIDIA_VISIBLE_DEVICES:-all}
-ENV NVIDIA_DRIVER_CAPABILITIES \
-    ${NVIDIA_DRIVER_CAPABILITIES:+$NVIDIA_DRIVER_CAPABILITIES,}graphics
-
 ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    mesa-utils \
+    x11-apps \
+    libgl1 \
+    libegl1 \
+    && rm -rf /var/lib/apt/lists/*
 
 # **************************************************************************** #
 
@@ -34,10 +35,6 @@ RUN apt-get update && apt-get install -y \
     wget \
     vim \
     git \
-    tmux \
-    tree \
-    gnome-terminal \
-    dbus-x11 \
     lsb-release \
     gnupg \
     && rm -rf /var/lib/apt/lists/*
@@ -106,11 +103,31 @@ WORKDIR $WORKSPACE
 
 RUN git clone https://github.com/PX4/px4_msgs.git && \
     cd px4_msgs && \
-    git checkout release/1.16 && \
+    git checkout v1.16.1 && \
     cd ..
 
 # RUN source /opt/ros/humble/setup.bash && \
 #     colcon build --packages-select px4_msgs
+
+
+# **************************************************************************** #
+
+RUN apt-get update && apt-get install -y \
+    gstreamer1.0-plugins-bad \
+    gstreamer1.0-libav \
+    gstreamer1.0-gl \
+    python3-gi \
+    python3-gst-1.0 \
+    libfuse2 \
+    libxcb-xinerama0 \
+    libxkbcommon-x11-0 \
+    libxcb-cursor-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt
+
+RUN wget https://d176tv9ibo4jno.cloudfront.net/latest/QGroundControl-x86_64.AppImage && \
+    chmod +x QGroundControl.AppImage
 
 # **************************************************************************** #
 
@@ -145,6 +162,7 @@ RUN pip install --upgrade pip && \
 
 WORKDIR /workspace
 RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
+RUN echo "alias qgc='/opt/QGroundControl.AppImage'" >> ~/.bashrc
 RUN echo "alias sros='source /workspace/install/setup.bash'" >> ~/.bashrc
 RUN echo "alias agent='MicroXRCEAgent udp4 -p8888'" >> ~/.bashrc
 RUN echo "export PATH=\$PATH:/workspace/src/PX4-Autopilot/build/px4_sitl_default/bin" >> ~/.bashrc

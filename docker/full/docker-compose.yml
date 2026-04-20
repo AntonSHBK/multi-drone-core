@@ -1,0 +1,38 @@
+﻿name: multi-drone-core-full-wsl
+
+services:
+  ros-humble-core:
+    container_name: multi-drone-core-full-wsl
+    build:
+      context: ../../..
+      dockerfile: docker/full/Dockerfile
+
+    environment:
+      DISPLAY: ${DISPLAY}
+      WAYLAND_DISPLAY: ${WAYLAND_DISPLAY}
+      XDG_RUNTIME_DIR: ${XDG_RUNTIME_DIR}
+      QT_X11_NO_MITSHM: "1"
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: all
+
+    volumes:
+      - ../:/workspace/src/multi-drone-core
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+
+    env_file:
+      - ./.env
+    
+    ports:
+      - "14540:14540/udp"  # PX4 MAVLink UDP
+      - "8888:8888/udp"    # Micro XRCE-DDS Agent
+    
+    networks:
+      - robot_network
+    
+    tty: true
+    stdin_open: true
+    gpus: all
+
+networks:
+  robot_network:
+    driver: bridge
