@@ -5,7 +5,7 @@ services:
     container_name: multi-drone-core-simple-wsl
 
     build:
-      context: ../../..
+      context: ../..
       dockerfile: docker/simple/Dockerfile
 
     environment:
@@ -20,6 +20,7 @@ services:
       - ./.env
 
     volumes:
+      - ../../:/workspace/src/multi-drone-core
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
 
     ports:

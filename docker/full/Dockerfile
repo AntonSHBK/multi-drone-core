@@ -32,6 +32,8 @@ RUN apt-get update && \
 RUN apt-get update && apt-get install -y \
     cmake \
     build-essential \
+    gnome-terminal \
+    dbus-x11 \
     wget \
     vim \
     git \

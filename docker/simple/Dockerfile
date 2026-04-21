@@ -41,9 +41,12 @@ RUN apt-get update && \
 RUN apt-get update && apt-get install -y \
     cmake \
     build-essential \
+    gnome-terminal \
+    dbus-x11 \
     wget \
     vim \
     git \
+    sudo \
     lsb-release \
     gnupg \
     && rm -rf /var/lib/apt/lists/*
@@ -59,6 +62,10 @@ RUN apt-get update && \
 
 # **************************************************************************** #
 
+RUN apt-get update && apt-get install -y \
+    libopencv-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install PX4 packages
 RUN git clone https://github.com/PX4/PX4-Autopilot.git
 
@@ -67,9 +74,29 @@ RUN cd ./PX4-Autopilot && \
     git submodule sync --recursive && \
     git submodule update --init --recursive
 
-RUN  ./PX4-Autopilot/Tools/setup/ubuntu.sh --no-sim-tools
+RUN sed -i 's/\bsudo\b//g' ./PX4-Autopilot/Tools/setup/ubuntu.sh && \
+    ./PX4-Autopilot/Tools/setup/ubuntu.sh --no-sim-tools
 
 RUN cd PX4-Autopilot && make px4_sitl
+
+# **************************************************************************** #
+
+RUN apt-get update && apt-get install -y \
+    gstreamer1.0-plugins-bad \
+    gstreamer1.0-libav \
+    gstreamer1.0-gl \
+    python3-gi \
+    python3-gst-1.0 \
+    libfuse2 \
+    libxcb-xinerama0 \
+    libxkbcommon-x11-0 \
+    libxcb-cursor-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt
+
+RUN wget https://d176tv9ibo4jno.cloudfront.net/latest/QGroundControl-x86_64.AppImage && \
+    chmod +x QGroundControl-x86_64.AppImage
 
 # **************************************************************************** #
 
@@ -94,5 +121,5 @@ RUN pip install --upgrade pip && \
 
 WORKDIR /workspace
 
-RUN echo "alias qgc='/opt/QGroundControl.AppImage'" >> ~/.bashrc
+RUN echo "alias qgc='/opt/QGroundControl-x86_64.AppImage'" >> ~/.bashrc
 RUN echo "export PATH=\$PATH:/workspace/src/PX4-Autopilot/build/px4_sitl_default/bin" >> ~/.bashrc

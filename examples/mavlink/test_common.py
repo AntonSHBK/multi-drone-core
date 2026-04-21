@@ -25,6 +25,8 @@ def main() -> None:
     )
 
     config = MavlinkBackendConfig()
+    config.connect_device = "udp:127.0.0.1:14540"
+    config.connect_baudrate = 115200
 
     backend = MavlinkBackend(
         controller=controller,

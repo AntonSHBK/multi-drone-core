@@ -4,7 +4,7 @@
 
     build:
       context: ../..
-      dockerfile: docker/ubuntu/simple/Dockerfile
+      dockerfile: docker/simple/Dockerfile
 
     environment:
       DISPLAY: ${DISPLAY}
